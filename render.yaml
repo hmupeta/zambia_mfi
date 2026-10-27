@@ -1,0 +1,68 @@
+﻿services:
+  - type: web
+    name: nimbus-api
+    rootDir: backend
+    runtime: python
+    plan: starter
+    buildCommand: "bash ./build.sh"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+    healthCheckPath: /api/docs/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nimbus-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nimbus-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: "2"
+
+  - type: worker
+    name: nimbus-worker
+    rootDir: backend
+    runtime: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config worker --loglevel=info --concurrency=2"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nimbus-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nimbus-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: nimbus-api
+          envVarKey: SECRET_KEY
+
+databases:
+  - name: nimbus-db
+    databaseName: nimbus_db
+    plan: free
+    postgresMajorVersion: "16"
+
+  - name: nimbus-redis
+    plan: free
+    ipAllowList: []
