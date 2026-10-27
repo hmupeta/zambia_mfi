@@ -1,0 +1,424 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ site.meta_title|default:site.site_name }}</title>
+  {% if site.meta_description %}<meta name="description" content="{{ site.meta_description }}" />{% endif %}
+  {% if site.favicon %}<link rel="icon" type="image/png" href="{{ site.favicon.url }}" />{% endif %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Instrument Serif', 'Georgia', 'serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    :root {
+      --ink: #0A0A0A;
+      --ink-2: #52525B;
+      --ink-3: #71717A;
+      --ink-4: #A1A1AA;
+      --paper: #FFFFFF;
+      --cream: #FAF7F2;
+      --cream-2: #F4EFE7;
+      --accent: {{ site.accent_color|default:"#B45309" }};
+      --primary: {{ site.primary_color|default:"#0A0A0A" }};
+      --border: rgba(10,10,10,0.08);
+      --border-2: rgba(10,10,10,0.12);
+    }
+
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      font-feature-settings: 'ss01', 'cv11', 'cv02';
+    }
+
+    .font-display {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-weight: 400;
+      letter-spacing: -0.025em;
+    }
+    .font-display em { font-style: italic; }
+
+    /* Grid pattern background */
+    .bg-grid {
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 64px 64px;
+      background-position: -1px -1px;
+    }
+    .bg-grid-mask {
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
+    }
+    .bg-dots {
+      background-image: radial-gradient(var(--border-2) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    /* Noise grain */
+    .noise::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+      opacity: 0.035;
+      pointer-events: none;
+      mix-blend-mode: multiply;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      padding: 0.9rem 1.75rem;
+      border-radius: 0.875rem;
+      font-weight: 500;
+      font-size: 0.9375rem;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 1px 2px rgba(10,10,10,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px -8px rgba(10,10,10,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.6s;
+    }
+    .btn-primary:hover::before { transform: translateX(100%); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink);
+      padding: 0.9rem 1.75rem;
+      border-radius: 0.875rem;
+      font-weight: 500;
+      font-size: 0.9375rem;
+      border: 1px solid var(--border-2);
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-ghost:hover {
+      background: var(--cream);
+      border-color: var(--ink);
+    }
+
+    /* Cards */
+    .card-lift {
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .card-lift:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -16px rgba(10,10,10,0.15);
+    }
+
+    /* Gradient text */
+    .gradient-text {
+      background: linear-gradient(135deg, var(--accent), #92400E);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* Scroll animations */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: 0.05s; }
+    .reveal-d2 { transition-delay: 0.10s; }
+    .reveal-d3 { transition-delay: 0.15s; }
+    .reveal-d4 { transition-delay: 0.20s; }
+    .reveal-d5 { transition-delay: 0.25s; }
+    .reveal-d6 { transition-delay: 0.30s; }
+
+    /* Marquee */
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+    .marquee-track {
+      display: flex;
+      animation: marquee 40s linear infinite;
+      width: max-content;
+    }
+
+    /* Mockup glow */
+    .mockup-glow::before {
+      content: '';
+      position: absolute;
+      inset: -20% -10% -40% -10%;
+      background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 60%);
+      filter: blur(60px);
+      z-index: -1;
+      opacity: 0.7;
+    }
+
+    /* Section eyebrow */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .eyebrow::before {
+      content: '';
+      display: block;
+      width: 1.5rem;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    /* Divider hairline */
+    .hairline { height: 1px; background: var(--border); }
+
+    /* Keycap */
+    .keycap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.25rem;
+      height: 1.25rem;
+      padding: 0 0.375rem;
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--ink-3);
+      background: var(--paper);
+      border: 1px solid var(--border-2);
+      border-radius: 0.3125rem;
+      box-shadow: 0 1px 0 var(--border-2);
+    }
+  </style>
+</head>
+
+<body class="antialiased">
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- NAVBAR                                                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<nav x-data="{ open: false, scrolled: false }"
+     @scroll.window="scrolled = window.scrollY > 20"
+     :class="scrolled ? 'bg-white/80 backdrop-blur-xl border-b border-black/5' : 'bg-transparent'"
+     class="sticky top-0 z-50 transition-all duration-300">
+  <div class="max-w-[1280px] mx-auto px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-2.5">
+        {% if site.logo %}
+          <img src="{{ site.logo.url }}" alt="{{ site.site_name }}" class="h-9 w-auto object-contain" />
+        {% else %}
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--primary);">
+              <span class="font-display text-white text-lg leading-none mt-0.5">N</span>
+            </div>
+            <div class="flex flex-col leading-none">
+              <span class="text-[15px] font-semibold tracking-tight">{{ site.site_short_name|default:"Nimbus" }}</span>
+              <span class="text-[10px] text-[var(--ink-3)] mt-0.5">Investment Ltd.</span>
+            </div>
+          </div>
+        {% endif %}
+      </a>
+
+      <!-- Desktop nav -->
+      <div class="hidden md:flex items-center gap-1">
+        {% for s in sections %}
+          {% if s.anchor == 'features' or s.anchor == 'how' or s.anchor == 'pricing' or s.anchor == 'faq' %}
+            <a href="#{{ s.anchor }}"
+               class="px-3.5 py-2 text-[14px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)] rounded-lg hover:bg-black/[0.03] transition">
+              {{ s.title|truncatechars:22 }}
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- Right actions -->
+      <div class="hidden md:flex items-center gap-2">
+        <a href="{{ site.api_docs_url }}"
+           class="px-3.5 py-2 text-[14px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)] rounded-lg hover:bg-black/[0.03] transition">
+          API
+        </a>
+        <a href="/docs/" class="text-gray-600 hover:text-gray-900">Documentation</a>
+        <a href="{{ site.login_url }}" class="btn-primary !py-2 !px-4 !text-[13.5px]">
+          Sign in
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+      </div>
+
+      <!-- Mobile toggle -->
+      <button @click="open = !open" class="md:hidden p-2 -mr-2 rounded-lg hover:bg-black/5" aria-label="Menu">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
+        </svg>
+      </button>
+    </div>
+
+    <div x-show="open" x-transition.opacity.duration.200ms class="md:hidden pb-4 pt-2 border-t border-black/5">
+      <div class="flex flex-col gap-1">
+        {% for s in sections %}
+          {% if s.anchor == 'features' or s.anchor == 'how' or s.anchor == 'pricing' or s.anchor == 'faq' %}
+            <a href="#{{ s.anchor }}" @click="open=false" class="px-3 py-2.5 rounded-lg text-[15px] font-medium text-[var(--ink-2)] hover:bg-black/5">{{ s.title|truncatechars:22 }}</a>
+          {% endif %}
+        {% endfor %}
+        <a href="{{ site.api_docs_url }}" @click="open=false" class="px-3 py-2.5 rounded-lg text-[15px] font-medium text-[var(--ink-2)] hover:bg-black/5">API</a>
+        <a href="{{ site.login_url }}" class="btn-primary mt-2 justify-center">Sign in</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- DYNAMIC SECTIONS                                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+{% for section in sections %}
+  {% include "landing/sections/"|add:section.section_type|add:".html" %}
+{% endfor %}
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<footer class="bg-[#0A0A0A] text-[#A1A1AA] relative overflow-hidden">
+  <div class="absolute inset-0 bg-grid opacity-[0.04] pointer-events-none"></div>
+
+  <div class="relative max-w-[1280px] mx-auto px-6 lg:px-8 pt-20 pb-10">
+    <div class="grid md:grid-cols-12 gap-12">
+
+      <div class="md:col-span-5">
+        <div class="flex items-center gap-2.5">
+          {% if site.logo %}
+            <img src="{{ site.logo.url }}" alt="{{ site.site_name }}" class="h-9 w-auto brightness-0 invert opacity-90" />
+          {% else %}
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
+                <span class="font-display text-[#0A0A0A] text-lg leading-none mt-0.5">N</span>
+              </div>
+              <span class="text-[15px] font-semibold text-white tracking-tight">{{ site.site_short_name|default:"Nimbus" }}</span>
+            </div>
+          {% endif %}
+        </div>
+        <p class="mt-6 text-[15px] leading-relaxed text-[#A1A1AA] max-w-sm">
+          {{ site.site_tagline }}
+        </p>
+
+        {% if site.contact_email %}
+        <div class="mt-8">
+          <a href="mailto:{{ site.contact_email }}"
+             class="inline-flex items-center gap-2 text-[14px] text-white hover:text-[var(--accent)] transition group">
+            {{ site.contact_email }}
+            <svg class="h-3.5 w-3.5 group-hover:translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </a>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="md:col-span-2">
+        <h4 class="text-white text-[13px] font-semibold uppercase tracking-wider">Product</h4>
+        <ul class="mt-4 space-y-3 text-[14px]">
+          {% for s in sections %}{% if s.anchor %}
+            <li><a href="#{{ s.anchor }}" class="hover:text-white transition">{{ s.title|truncatechars:20 }}</a></li>
+          {% endif %}{% endfor %}
+        </ul>
+      </div>
+
+      <div class="md:col-span-2">
+        <h4 class="text-white text-[13px] font-semibold uppercase tracking-wider">Developers</h4>
+        <ul class="mt-4 space-y-3 text-[14px]">
+          <li><a href="{{ site.api_docs_url }}" class="hover:text-white transition">API Reference</a></li>
+          <li><a href="{{ site.api_docs_url }}" class="hover:text-white transition">Documentation</a></li>
+          <li><a href="{{ site.login_url }}" class="hover:text-white transition">Sign In</a></li>
+        </ul>
+      </div>
+
+      <div class="md:col-span-3">
+        <h4 class="text-white text-[13px] font-semibold uppercase tracking-wider">Contact</h4>
+        <ul class="mt-4 space-y-3 text-[14px]">
+          {% if site.contact_address %}<li>{{ site.contact_address }}</li>{% endif %}
+          {% if site.contact_phone %}<li><a href="tel:{{ site.contact_phone }}" class="hover:text-white transition">{{ site.contact_phone }}</a></li>{% endif %}
+        </ul>
+
+        {% if site.linkedin_url or site.twitter_url or site.facebook_url or site.instagram_url %}
+        <div class="mt-6 flex gap-2">
+          {% if site.linkedin_url %}
+          <a href="{{ site.linkedin_url }}" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center transition" aria-label="LinkedIn">
+            <svg class="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+          </a>
+          {% endif %}
+          {% if site.twitter_url %}
+          <a href="{{ site.twitter_url }}" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center transition" aria-label="Twitter">
+            <svg class="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-[13px]">
+      <p>{{ site.footer_copyright|default:site.site_name }}</p>
+      <div class="flex items-center gap-5">
+        {% if site.footer_note %}<span>{{ site.footer_note }}</span>{% endif %}
+        <span class="text-[#52525B]">·</span>
+        <a href="#" class="hover:text-white transition">Privacy</a>
+        <a href="#" class="hover:text-white transition">Terms</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Scroll reveal observer -->
+<script>
+  (function () {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  })();
+</script>
+
+</body>
+</html>

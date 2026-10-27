@@ -1,0 +1,637 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Clients — Nimbus{% endblock %}
+{% block page_title %}Clients{% endblock %}
+
+{% block content %}
+<div x-data="clientsPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <!-- Stats bar -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <button @click="clearFilters()" class="card card-hover p-4 text-left transition">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total</p>
+      <p class="text-[26px] font-display mt-1" x-text="stats.total ?? '—'"></p>
+    </button>
+    <button @click="setKycFilter('VERIFIED')" class="card card-hover p-4 text-left transition"
+            :class="filterKyc === 'VERIFIED' && 'ring-2 ring-emerald-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Verified</p>
+      <p class="text-[26px] font-display mt-1 text-emerald-700" x-text="stats.verified ?? '—'"></p>
+    </button>
+    <button @click="setKycFilter('PENDING')" class="card card-hover p-4 text-left transition"
+            :class="filterKyc === 'PENDING' && 'ring-2 ring-amber-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Pending KYC</p>
+      <p class="text-[26px] font-display mt-1 text-amber-700" x-text="stats.pending ?? '—'"></p>
+    </button>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active</p>
+      <p class="text-[26px] font-display mt-1 text-blue-700" x-text="stats.active ?? '—'"></p>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="card p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="relative flex-1 min-w-[240px]">
+        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)] pointer-events-none"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" x-model.debounce.400ms="search" @input="reload()"
+               placeholder="Search by name, NRC, phone, email…"
+               class="input !py-2 !pl-10 !pr-9" />
+        <button x-show="search" x-cloak @click="search=''; reload()"
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--ink-3)] hover:text-[var(--ink)]">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <select x-model="filterBranch" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All branches</option>
+        <template x-for="b in branches" :key="b.id">
+          <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+        </template>
+      </select>
+
+      <select x-model="filterKyc" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All KYC statuses</option>
+        <option value="VERIFIED">Verified</option>
+        <option value="PENDING">Pending</option>
+        <option value="IN_REVIEW">In Review</option>
+        <option value="REJECTED">Rejected</option>
+        <option value="EXPIRED">Expired</option>
+      </select>
+
+      <select x-model="ordering" @change="reload()" class="input !py-2 !w-auto">
+        <option value="-created_at">Newest first</option>
+        <option value="first_name">Name (A→Z)</option>
+        <option value="nrc">NRC</option>
+        <option value="-credit_score">Highest credit score</option>
+      </select>
+
+      <div class="flex-1"></div>
+
+      <button @click="reload()" :disabled="loading"
+              class="p-2 rounded-lg text-[var(--ink-2)] hover:bg-black/5 transition">
+        <svg class="w-4 h-4" :class="loading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
+
+      <button @click="exportCsv()" :disabled="!rows.length"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">Export</button>
+
+      <button @click="openCreate()"
+              class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        New Client
+      </button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card p-0 overflow-hidden">
+    <div x-show="loading && !rows.length" class="p-4 space-y-3">
+      <template x-for="i in 5" :key="i">
+        <div class="flex items-center gap-4 animate-pulse">
+          <div class="w-10 h-10 rounded-full bg-[var(--cream)]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded flex-1"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[120px]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[80px]"></div>
+        </div>
+      </template>
+    </div>
+
+    <div x-show="!loading && rows.length === 0" class="p-16 text-center">
+      <h3 class="font-display text-[20px] tracking-tight mb-1"
+          x-text="hasActiveFilters ? 'No clients match these filters' : 'No clients yet'"></h3>
+      <p class="text-[13px] text-[var(--ink-3)] mb-4"
+         x-text="hasActiveFilters ? 'Try clearing filters.' : 'Clients will appear here once onboarded.'"></p>
+      <button x-show="hasActiveFilters" @click="clearFilters()"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">Clear filters</button>
+    </div>
+
+    <table x-show="!loading || rows.length > 0" class="w-full text-[13px]">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr class="text-left text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+          <th class="px-3 py-3 font-medium">Name</th>
+          <th class="px-3 py-3 font-medium">Contact</th>
+          <th class="px-3 py-3 font-medium">NRC</th>
+          <th class="px-3 py-3 font-medium">Location</th>
+          <th class="px-3 py-3 font-medium">KYC</th>
+          <th class="px-3 py-3 font-medium text-center">Loans</th>
+          <th class="px-3 py-3 font-medium text-right">Outstanding</th>
+          <th class="px-4 py-3 font-medium text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[var(--border)]">
+        <template x-for="c in rows" :key="c.id">
+          <tr class="hover:bg-[var(--cream)] transition group cursor-pointer" @click="goDetail(c.id)">
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-3">
+                <template x-if="c.photo_url">
+                  <img :src="c.photo_url" class="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                </template>
+                <template x-if="!c.photo_url">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0"
+                       :style="'background:' + avatarColor(c)"
+                       x-text="initial(c)"></div>
+                </template>
+                <div class="min-w-0">
+                  <p class="font-medium truncate max-w-[180px]" x-text="c.full_name"></p>
+                  <p class="text-[11px] text-[var(--ink-3)] font-mono" x-text="c.branch_code || ''"></p>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-3 text-[12px]">
+              <p class="font-mono text-[var(--ink-2)]" x-text="c.phone || '—'"></p>
+              <p class="text-[11px] text-[var(--ink-3)] truncate max-w-[180px]" x-text="c.email || ''"></p>
+            </td>
+            <td class="px-3 py-3 font-mono text-[12px]" x-text="c.nrc"></td>
+            <td class="px-3 py-3 text-[12px] text-[var(--ink-2)]">
+              <p x-text="c.district || '—'"></p>
+              <p class="text-[11px] text-[var(--ink-3)]" x-text="c.province || ''"></p>
+            </td>
+            <td class="px-3 py-3">
+              <span class="pill" :class="kycPill(c.kyc_status)" x-text="c.kyc_status_display || c.kyc_status"></span>
+            </td>
+            <td class="px-3 py-3 text-center">
+              <span class="inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded-md bg-[var(--cream)] text-[12px] font-mono"
+                    x-text="c.active_loans_count ?? 0"></span>
+            </td>
+            <td class="px-3 py-3 text-right font-mono font-medium"
+                :class="parseFloat(c.outstanding_balance || 0) > 0 ? 'text-[var(--ink)]' : 'text-[var(--ink-3)]'"
+                x-text="fmtK(c.outstanding_balance)"></td>
+            <td class="px-4 py-3 text-right" @click.stop>
+              <div class="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+                <button @click="openEdit(c)"
+                        class="p-1.5 rounded text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition"
+                        title="Edit">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-[13px]">
+    <span class="text-[var(--ink-3)] font-mono text-[12px]">
+      Showing <span x-text="rangeStart"></span>–<span x-text="rangeEnd"></span> of <span x-text="total"></span>
+    </span>
+    <div class="flex items-center gap-1">
+      <button @click="prevPage()" :disabled="!prevUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40">
+        ← Prev
+      </button>
+      <template x-for="p in pageNumbers" :key="p">
+        <button @click="goToPage(p)"
+                class="min-w-[32px] px-2.5 py-1.5 rounded-lg text-[12.5px] font-mono transition"
+                :class="p === currentPage ? 'bg-[var(--ink)] text-white' : 'border border-[var(--border)] hover:bg-[var(--cream)]'"
+                x-text="p"></button>
+      </template>
+      <button @click="nextPage()" :disabled="!nextUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40">
+        Next →
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ Create/Edit modal ═══ -->
+  <div x-show="modal" x-cloak
+       @keydown.escape.window="closeModal()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="closeModal()"
+         class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0">
+        <div>
+          <h3 class="font-display text-[22px] tracking-tight"
+              x-text="form.id ? 'Edit Client' : 'New Client'"></h3>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5"
+             x-text="form.id ? 'Update client details' : 'Register a new client'"></p>
+        </div>
+        <button @click="closeModal()"
+                class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Identity</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label class="label">NRC <span class="text-red-500">*</span></label>
+            <input type="text" x-model="form.nrc" class="input font-mono" placeholder="123456-78-9" required />
+          </div>
+          <div>
+            <label class="label">First Name <span class="text-red-500">*</span></label>
+            <input type="text" x-model="form.first_name" class="input" required />
+          </div>
+          <div>
+            <label class="label">Last Name <span class="text-red-500">*</span></label>
+            <input type="text" x-model="form.last_name" class="input" required />
+          </div>
+          <div>
+            <label class="label">Gender <span class="text-red-500">*</span></label>
+            <select x-model="form.gender" class="input" required>
+              <option value="">— Select —</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Date of Birth</label>
+            <input type="date" x-model="form.date_of_birth" class="input" />
+          </div>
+          <div>
+            <label class="label">Marital Status</label>
+            <select x-model="form.marital_status" class="input">
+              <option value="">—</option>
+              <option value="SINGLE">Single</option>
+              <option value="MARRIED">Married</option>
+              <option value="DIVORCED">Divorced</option>
+              <option value="WIDOWED">Widowed</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Contact</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label class="label">Phone <span class="text-red-500">*</span></label>
+            <input type="tel" x-model="form.phone" class="input font-mono" placeholder="+260971234567" required />
+          </div>
+          <div>
+            <label class="label">Alt Phone</label>
+            <input type="tel" x-model="form.alt_phone" class="input font-mono" />
+          </div>
+          <div>
+            <label class="label">Email</label>
+            <input type="email" x-model="form.email" class="input" />
+          </div>
+        </div>
+
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Location</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label class="label">Branch <span class="text-red-500">*</span></label>
+            <select x-model="form.branch" class="input" required>
+              <option value="">— Select branch —</option>
+              <template x-for="b in branches" :key="b.id">
+                <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="label">Village / Area</label>
+            <input type="text" x-model="form.village_or_area" class="input" />
+          </div>
+          <div>
+            <label class="label">District</label>
+            <input type="text" x-model="form.district" class="input" />
+          </div>
+          <div>
+            <label class="label">Province</label>
+            <input type="text" x-model="form.province" class="input" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Home Address</label>
+            <textarea x-model="form.home_address" rows="2" class="input"></textarea>
+          </div>
+        </div>
+
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Employment</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label class="label">Occupation</label>
+            <input type="text" x-model="form.occupation" class="input" />
+          </div>
+          <div>
+            <label class="label">Employer</label>
+            <input type="text" x-model="form.employer_name" class="input" />
+          </div>
+          <div>
+            <label class="label">Employer Address</label>
+            <input type="text" x-model="form.employer_address" class="input" />
+          </div>
+        </div>
+
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Documents</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="label">Photo</label>
+            <input type="file" @change="onFile('photo', $event)" accept="image/*" class="input !py-2" />
+          </div>
+          <div>
+            <label class="label">National ID (front)</label>
+            <input type="file" @change="onFile('national_id_front', $event)" accept="image/*" class="input !py-2" />
+          </div>
+          <div>
+            <label class="label">National ID (back)</label>
+            <input type="file" @change="onFile('national_id_back', $event)" accept="image/*" class="input !py-2" />
+          </div>
+        </div>
+
+        <label class="flex items-center gap-3 cursor-pointer text-[13.5px] mt-6">
+          <input type="checkbox" x-model="form.is_active" class="w-4 h-4" />
+          <span>Active client</span>
+        </label>
+
+        <div x-show="formError" x-cloak
+             class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800"
+             x-text="formError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3 flex-shrink-0">
+        <button @click="closeModal()" :disabled="saving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">
+          Cancel
+        </button>
+        <button @click="save()" :disabled="saving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="saving ? 'Saving…' : (form.id ? 'Save Changes' : 'Create Client')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function clientsPage() {
+  const API = '/api/clients/admin';
+
+  return {
+    rows: [], branches: [], loading: false,
+    search: '', filterBranch: '', filterKyc: '', ordering: '-created_at',
+    total: 0, pageSize: 25, nextUrl: null, prevUrl: null, currentPage: 1,
+    stats: { total: null, verified: null, pending: null, active: null },
+
+    modal: false,
+    saving: false,
+    formError: '',
+    form: {
+      id: null, nrc: '', first_name: '', last_name: '', gender: '',
+      date_of_birth: '', marital_status: '', phone: '', alt_phone: '', email: '',
+      occupation: '', employer_name: '', employer_address: '',
+      home_address: '', village_or_area: '', district: '', province: '',
+      branch: '', is_active: true,
+      photo: null, national_id_front: null, national_id_back: null,
+    },
+
+    async init() {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('search')) this.search = p.get('search');
+      if (p.get('branch')) this.filterBranch = p.get('branch');
+      if (p.get('kyc')) this.filterKyc = p.get('kyc');
+      if (p.get('ordering')) this.ordering = p.get('ordering');
+      if (p.get('page')) this.currentPage = parseInt(p.get('page')) || 1;
+      await Promise.all([this.loadBranches(), this.loadStats(), this.reload()]);
+      const editId = p.get('edit');
+      if (editId) {
+        const c = this.rows.find(r => r.id === editId);
+        if (c) this.openEdit(c);
+      }
+    },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + this.getToken(), ...extra }; },
+
+    get hasActiveFilters() { return !!(this.search || this.filterBranch || this.filterKyc); },
+    get rangeStart() { return this.total === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1; },
+    get rangeEnd() { return Math.min(this.currentPage * this.pageSize, this.total); },
+    get totalPages() { return Math.max(1, Math.ceil(this.total / this.pageSize)); },
+    get pageNumbers() {
+      const t = this.totalPages, c = this.currentPage, max = 5;
+      let s = Math.max(1, c - Math.floor(max / 2));
+      let e = Math.min(t, s + max - 1);
+      s = Math.max(1, e - max + 1);
+      const p = []; for (let i = s; i <= e; i++) p.push(i); return p;
+    },
+
+    buildQuery() {
+      const p = new URLSearchParams();
+      p.set('page_size', this.pageSize);
+      if (this.search) p.set('search', this.search);
+      if (this.filterBranch) p.set('branch', this.filterBranch);
+      if (this.filterKyc) p.set('kyc_status', this.filterKyc);
+      p.set('ordering', this.ordering);
+      if (this.currentPage > 1) p.set('page', this.currentPage);
+      return p.toString();
+    },
+
+    async reload() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/?${this.buildQuery()}`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load clients');
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.total = d.count ?? this.rows.length;
+        this.nextUrl = d.next; this.prevUrl = d.previous;
+      } catch (e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    async loadBranches() {
+      try {
+        const r = await fetch('/api/auth/branches/?page_size=200&ordering=code', { headers: this.authHeaders() });
+        if (r.ok) { const d = await r.json(); this.branches = d.results || d; }
+      } catch (_) {}
+    },
+
+    async loadStats() {
+      try {
+        const r = await fetch(`${API}/stats/`, { headers: this.authHeaders() });
+        if (r.ok) this.stats = await r.json();
+      } catch (_) {}
+    },
+
+    clearFilters() {
+      this.search = ''; this.filterBranch = ''; this.filterKyc = '';
+      this.ordering = '-created_at'; this.currentPage = 1;
+      this.reload();
+    },
+
+    setKycFilter(k) {
+      if (k === 'PENDING') {
+        this.filterKyc = this.filterKyc === 'PENDING' ? '' : 'PENDING';
+      } else if (k === 'VERIFIED') {
+        this.filterKyc = 'VERIFIED';
+      } else {
+        this.filterKyc = k;
+      }
+      this.currentPage = 1; this.reload();
+    },
+
+    nextPage() { if (this.nextUrl) { this.currentPage++; this.loadFromUrl(this.nextUrl); } },
+    prevPage() { if (this.prevUrl) { this.currentPage = Math.max(1, this.currentPage - 1); this.loadFromUrl(this.prevUrl); } },
+    goToPage(n) { if (n !== this.currentPage) { this.currentPage = n; this.reload(); } },
+
+    async loadFromUrl(url) {
+      this.loading = true;
+      try {
+        const r = await fetch(url, { headers: this.authHeaders() });
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.nextUrl = d.next; this.prevUrl = d.previous;
+      } catch (e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    goDetail(id) { window.location.href = '/app/clients/' + id + '/'; },
+
+    openCreate() {
+      this.formError = '';
+      this.form = {
+        id: null, nrc: '', first_name: '', last_name: '', gender: '',
+        date_of_birth: '', marital_status: '', phone: '', alt_phone: '', email: '',
+        occupation: '', employer_name: '', employer_address: '',
+        home_address: '', village_or_area: '', district: '', province: '',
+        branch: this.branches[0]?.id || '', is_active: true,
+        photo: null, national_id_front: null, national_id_back: null,
+      };
+      this.modal = true;
+    },
+
+    openEdit(c) {
+      this.formError = '';
+      this.form = {
+        id: c.id,
+        nrc: c.nrc || '', first_name: c.first_name || '', last_name: c.last_name || '',
+        gender: c.gender || '', date_of_birth: '', marital_status: '',
+        phone: c.phone || '', alt_phone: c.alt_phone || '', email: c.email || '',
+        occupation: '', employer_name: '', employer_address: '',
+        home_address: '', village_or_area: '', district: c.district || '',
+        province: c.province || '', branch: c.branch || '', is_active: !!c.is_active,
+        photo: null, national_id_front: null, national_id_back: null,
+      };
+      fetch(`${API}/${c.id}/`, { headers: this.authHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(full => {
+          if (full) {
+            this.form.date_of_birth = full.date_of_birth || '';
+            this.form.marital_status = full.marital_status || '';
+            this.form.occupation = full.occupation || '';
+            this.form.employer_name = full.employer_name || '';
+            this.form.employer_address = full.employer_address || '';
+            this.form.home_address = full.home_address || '';
+            this.form.village_or_area = full.village_or_area || '';
+          }
+        });
+      this.modal = true;
+    },
+
+    closeModal() { this.modal = false; this.formError = ''; },
+
+    onFile(field, event) {
+      const f = event.target.files[0];
+      if (f) this.form[field] = f;
+    },
+
+    async save() {
+      this.saving = true;
+      this.formError = '';
+      try {
+        if (!this.form.nrc || !this.form.first_name || !this.form.last_name) {
+          throw new Error('NRC, first name, and last name are required.');
+        }
+        if (!this.form.phone) throw new Error('Phone number is required.');
+        if (!this.form.gender) throw new Error('Gender is required.');
+        if (!this.form.branch) throw new Error('Branch is required.');
+
+        const isEdit = !!this.form.id;
+        const url = isEdit ? `${API}/${this.form.id}/` : `${API}/`;
+        const method = isEdit ? 'PATCH' : 'POST';
+
+        const fd = new FormData();
+        Object.entries(this.form).forEach(([k, v]) => {
+          if (v === null || v === undefined || v === '') return;
+          if (k === 'id') return;
+          if (typeof v === 'boolean') fd.append(k, v ? 'true' : 'false');
+          else fd.append(k, v);
+        });
+
+        const r = await fetch(url, {
+          method,
+          headers: this.authHeaders(),
+          body: fd,
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = Object.entries(err).map(([k, v]) =>
+            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+          ).join(' · ') || 'Save failed';
+          throw new Error(msg);
+        }
+
+        this.modal = false;
+        await Promise.all([this.loadStats(), this.reload()]);
+      } catch (e) {
+        this.formError = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    initial(c) { return ((c.first_name || c.nrc || '?')[0] || '?').toUpperCase(); },
+
+    avatarColor(c) {
+      const colors = ['#B45309', '#0E7490', '#047857', '#7C3AED', '#BE123C', '#0891B2', '#C2410C', '#15803D'];
+      let h = 0; const s = c.id || c.nrc || '';
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return colors[Math.abs(h) % colors.length];
+    },
+
+    kycPill(s) {
+      return { VERIFIED: 'pill-success', PENDING: 'pill-warning', IN_REVIEW: 'pill-info',
+               SUBMITTED: 'pill-info', REJECTED: 'pill-danger', EXPIRED: 'pill-neutral' }[s] || 'pill-neutral';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    exportCsv() {
+      if (!this.rows.length) return;
+      const headers = ['NRC', 'Name', 'Phone', 'Email', 'District', 'Province', 'KYC', 'Active Loans', 'Outstanding'];
+      const lines = [headers.join(',')];
+      for (const c of this.rows) {
+        lines.push([
+          c.nrc, c.full_name, c.phone || '', c.email || '',
+          c.district || '', c.province || '', c.kyc_status_display || c.kyc_status,
+          c.active_loans_count ?? 0, c.outstanding_balance,
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clients-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('clientsPage', clientsPage);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+<section {% if section.anchor %}id="{{ section.anchor }}"{% endif %} class="py-28 lg:py-32 bg-[var(--cream)] scroll-mt-20">
+  <div class="max-w-[840px] mx-auto px-6 lg:px-8">
+    <div class="mb-14 reveal">
+      {% if section.eyebrow %}<div class="eyebrow mb-5">{{ section.eyebrow }}</div>{% endif %}
+      <h2 class="font-display text-[42px] sm:text-[56px] leading-[1.02] text-[var(--ink)]">
+        {{ section.title }}
+      </h2>
+    </div>
+
+    <div class="space-y-0 border-t border-[var(--border)]" x-data="{ open: 1 }">
+      {% for item in section.visible_items %}
+      <div class="border-b border-[var(--border)]">
+        <button @click="open = open === {{ forloop.counter }} ? 0 : {{ forloop.counter }}"
+                class="w-full flex items-center justify-between gap-6 py-6 text-left group">
+          <span class="font-display text-[22px] sm:text-[26px] leading-tight text-[var(--ink)] group-hover:text-[var(--accent)] transition">
+            {{ item.title }}
+          </span>
+          <div class="w-8 h-8 rounded-full border border-[var(--border-2)] flex items-center justify-center flex-shrink-0 transition"
+               :class="open === {{ forloop.counter }} ? 'bg-[var(--ink)] border-[var(--ink)]' : ''">
+            <svg :class="open === {{ forloop.counter }} ? 'rotate-45 text-white' : 'text-[var(--ink-3)]'"
+                 class="h-3.5 w-3.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+          </div>
+        </button>
+        <div x-show="open === {{ forloop.counter }}" x-collapse class="pb-6 -mt-1">
+          <p class="text-[15.5px] text-[var(--ink-2)] leading-[1.75] max-w-[680px]">{{ item.description }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

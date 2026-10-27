@@ -1,0 +1,242 @@
+{% extends "app/base_app.html" %}
+{% block title %}Audit Trail — Nimbus{% endblock %}
+{% block page_title %}Security & Audit Trail{% endblock %}
+
+{% block content %}
+<div x-data="auditTrail()" x-init="init()">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
+    <div>
+      <h2 class="font-display text-[28px] sm:text-[32px] leading-tight tracking-tight">Audit Trail</h2>
+      <p class="mt-1 text-[14px] text-[var(--ink-2)]">
+        Immutable log of all system actions. Total records: <span x-text="total"></span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-4 mb-6 flex items-center gap-4 flex-wrap">
+    <div class="relative flex-1 min-w-[250px]">
+      <svg class="absolute left-3 top-3 h-4 w-4 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" x-model.debounce.500ms="search" @input="reload()"
+             placeholder="Search user, entity ID, or IP address..." class="input pl-9" />
+    </div>
+
+    <select x-model="actionFilter" @change="reload()" class="input !w-auto">
+      <option value="">All Actions</option>
+      <option value="CREATE">Create</option>
+      <option value="UPDATE">Update</option>
+      <option value="DELETE">Delete</option>
+      <option value="APPROVE">Approve</option>
+      <option value="REJECT">Reject</option>
+      <option value="LOGIN">Login</option>
+    </select>
+
+    <select x-model="entityFilter" @change="reload()" class="input !w-auto">
+      <option value="">All Entities</option>
+      <option value="Loan">Loan</option>
+      <option value="Payment">Payment</option>
+      <option value="KYCVerification">KYC Verification</option>
+      <option value="Client">Client</option>
+      <option value="LoanProduct">Loan Product</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="card overflow-hidden">
+    <div x-show="loading" class="p-6 space-y-3">
+      <template x-for="i in 5" :key="i">
+        <div class="h-10 rounded bg-[var(--border)] animate-pulse"></div>
+      </template>
+    </div>
+
+    <table x-show="!loading && logs.length > 0" x-cloak class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-40">Timestamp</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">User</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Action</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Entity</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">IP Address</th>
+          <th class="w-10"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="log in logs" :key="log.id">
+          <tr class="border-t border-[var(--border)] hover:bg-[var(--cream)]/50 transition">
+            <td class="px-5 py-3 text-[12.5px] font-mono text-[var(--ink-2)]" x-text="fmtDateTime(log.created_at)"></td>
+            <td class="px-5 py-3">
+              <div class="text-[13px] font-medium" x-text="log.username || 'System'"></div>
+              <!-- Using the branch_name from your serializer -->
+              <div class="text-[11px] font-mono text-[var(--ink-3)]" x-text="log.branch_name || '—'"></div>
+            </td>
+            <td class="px-5 py-3">
+              <span class="pill" :class="actionPill(log.action)" x-text="log.action"></span>
+            </td>
+            <td class="px-5 py-3">
+              <div class="text-[13px]" x-text="log.entity_type"></div>
+              <div class="text-[11px] font-mono text-[var(--ink-3)] truncate max-w-[150px]" x-text="log.entity_id"></div>
+            </td>
+            <td class="px-5 py-3 text-[12px] font-mono text-[var(--ink-3)]" x-text="log.ip_address || '—'"></td>
+            <td class="px-3 py-3 text-right">
+              <button @click="viewDetails(log)" class="text-[var(--accent)] hover:underline text-[12.5px] font-medium">Details</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="!loading && totalPages > 1" x-cloak class="flex items-center justify-between px-5 py-4 mt-2">
+    <p class="text-[13px] text-[var(--ink-3)]">Page <span x-text="page"></span> of <span x-text="totalPages"></span></p>
+    <div class="flex gap-2">
+      <button @click="prevPage()" :disabled="!hasPrev" class="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-[var(--border-2)] hover:bg-[var(--cream)] disabled:opacity-50">Previous</button>
+      <button @click="nextPage()" :disabled="!hasNext" class="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-[var(--border-2)] hover:bg-[var(--cream)] disabled:opacity-50">Next</button>
+    </div>
+  </div>
+
+  <!-- Details Modal -->
+  <template x-teleport="body">
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-black/40" @keydown.escape.window="showModal = false">
+      <div class="flex min-h-full items-center justify-center p-4" @click.self="showModal = false">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" @click.stop>
+          
+          <div class="p-6 border-b border-[var(--border)] flex items-center justify-between shrink-0">
+            <div>
+              <h3 class="font-display text-[20px]">Audit Log Details</h3>
+              <p class="text-[12px] text-[var(--ink-3)] font-mono mt-1" x-text="activeLog?.id"></p>
+            </div>
+            <button @click="showModal = false" class="text-2xl leading-none text-[var(--ink-3)] hover:text-[var(--ink)]">&times;</button>
+          </div>
+          
+          <div class="p-6 overflow-y-auto space-y-5">
+            <div class="grid grid-cols-2 gap-4 text-[13px]">
+              <div><span class="text-[var(--ink-3)] block">Date</span> <span x-text="fmtDateTime(activeLog?.created_at)"></span></div>
+              <div><span class="text-[var(--ink-3)] block">Action</span> <span class="pill" :class="actionPill(activeLog?.action)" x-text="activeLog?.action"></span></div>
+              <div><span class="text-[var(--ink-3)] block">User</span> <span x-text="activeLog?.username || 'System'"></span></div>
+              <div><span class="text-[var(--ink-3)] block">Branch</span> <span x-text="activeLog?.branch_name || '—'"></span></div>
+              <div class="col-span-2"><span class="text-[var(--ink-3)] block">Entity</span> <span x-text="activeLog?.entity_type + ' (' + activeLog?.entity_id + ')'"></span></div>
+            </div>
+            
+            <!-- New Values -->
+            <div x-show="activeLog?.new_values">
+              <h4 class="text-[11px] font-medium text-[var(--ink-3)] uppercase tracking-wider mb-2">New Values</h4>
+              <div class="bg-[var(--cream)] p-4 rounded-xl border border-[var(--border)] overflow-x-auto">
+                <pre class="text-[12px] font-mono text-[var(--ink-2)]" x-text="formatJSON(activeLog?.new_values)"></pre>
+              </div>
+            </div>
+
+            <!-- Old Values -->
+            <div x-show="activeLog?.old_values">
+              <h4 class="text-[11px] font-medium text-red-600 uppercase tracking-wider mb-2">Previous Values</h4>
+              <div class="bg-red-50 p-4 rounded-xl border border-red-200 overflow-x-auto">
+                <pre class="text-[12px] font-mono text-red-800" x-text="formatJSON(activeLog?.old_values)"></pre>
+              </div>
+            </div>
+            
+            <div x-show="!activeLog?.new_values && !activeLog?.old_values" class="text-center py-6 text-[var(--ink-3)]">
+              No detailed changes recorded for this action.
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function auditTrail() {
+  return {
+    logs: [],
+    loading: true,
+    total: 0,
+    page: 1,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+    
+    search: '',
+    actionFilter: '',
+    entityFilter: '',
+
+    showModal: false,
+    activeLog: null,
+
+    async init() { await this.load(); },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+
+    async load() {
+      this.loading = true;
+      try {
+        const params = new URLSearchParams({ page: this.page });
+        if (this.search) params.set('search', this.search);
+        if (this.actionFilter) params.set('action', this.actionFilter);
+        if (this.entityFilter) params.set('entity_type', this.entityFilter);
+
+        const r = await fetch(`/api/auth/audit-logs/?${params}`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() }
+        });
+        
+        if (r.ok) {
+          const data = await r.json();
+          this.logs = data.results || data;
+          this.total = data.count || this.logs.length;
+          this.totalPages = Math.ceil(this.total / 20) || 1;
+          this.hasNext = !!data.next;
+          this.hasPrev = !!data.previous;
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    reload() { this.page = 1; this.load(); },
+    nextPage() { if (this.hasNext) { this.page++; this.load(); } },
+    prevPage() { if (this.hasPrev) { this.page--; this.load(); } },
+
+    viewDetails(log) {
+      this.activeLog = log;
+      this.showModal = true;
+    },
+
+    formatJSON(data) {
+      if (!data) return 'No changes recorded.';
+      try {
+        const obj = typeof data === 'string' ? JSON.parse(data) : data;
+        return JSON.stringify(obj, null, 2);
+      } catch (e) {
+        return String(data);
+      }
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    },
+
+    actionPill(a) {
+      return {
+        CREATE: 'pill-success',
+        UPDATE: 'pill-info',
+        DELETE: 'pill-danger',
+        APPROVE: 'pill-success',
+        REJECT: 'pill-danger',
+        LOGIN: 'pill-neutral'
+      }[a] || 'pill-neutral';
+    }
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('auditTrail', auditTrail));
+</script>
+{% endblock %}

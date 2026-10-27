@@ -1,0 +1,65 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}Blog — {{ site.site_name }}{% endblock %}
+
+{% block content %}
+<header class="bg-[var(--cream)] border-b border-[var(--border)]">
+  <div class="max-w-[1280px] mx-auto px-6 pt-20 pb-16">
+    <div class="eyebrow mb-5">Blog</div>
+    <h1 class="font-display text-[56px] sm:text-[72px] leading-[1.02] text-[var(--ink)]">Insights & Updates</h1>
+  </div>
+</header>
+
+{% if featured %}
+<section class="py-16 bg-white">
+  <div class="max-w-[1280px] mx-auto px-6">
+    <a href="/blog/{{ featured.slug }}/" class="group grid lg:grid-cols-2 gap-10 items-center border border-[var(--border)] rounded-2xl overflow-hidden bg-white card-lift">
+      {% if featured.cover_image %}
+      <div class="aspect-[16/10] bg-[var(--cream)] overflow-hidden">
+        <img src="{{ featured.cover_image.url }}" alt="{{ featured.title }}" class="w-full h-full object-cover group-hover:scale-[1.03] transition duration-500" />
+      </div>
+      {% endif %}
+      <div class="p-10">
+        {% if featured.category %}<div class="eyebrow mb-4">{{ featured.category }}</div>{% endif %}
+        <h2 class="font-display text-[32px] sm:text-[40px] leading-[1.1] text-[var(--ink)]">{{ featured.title }}</h2>
+        <p class="mt-5 text-[16px] text-[var(--ink-2)] leading-[1.7]">{{ featured.excerpt }}</p>
+        <div class="mt-6 flex items-center gap-3 text-[13px] text-[var(--ink-3)]">
+          <span>{{ featured.published_at|date:"M j, Y" }}</span>
+          <span>·</span>
+          <span>{{ featured.views }} views</span>
+        </div>
+      </div>
+    </a>
+  </div>
+</section>
+{% endif %}
+
+<section class="py-16 bg-[var(--cream)]">
+  <div class="max-w-[1280px] mx-auto px-6">
+    {% if posts %}
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+      {% for post in posts %}
+      <a href="/blog/{{ post.slug }}/" class="group block bg-white rounded-2xl overflow-hidden border border-[var(--border)] card-lift">
+        {% if post.cover_image %}
+        <div class="aspect-[16/10] bg-[var(--cream)] overflow-hidden">
+          <img src="{{ post.cover_image.url }}" alt="{{ post.title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+        </div>
+        {% endif %}
+        <div class="p-6">
+          {% if post.category %}<div class="text-[11px] font-mono uppercase tracking-wider text-[var(--accent)] mb-3">{{ post.category }}</div>{% endif %}
+          <h3 class="font-display text-[22px] leading-[1.2] text-[var(--ink)] mb-3 group-hover:text-[var(--accent)] transition">{{ post.title }}</h3>
+          <p class="text-[14px] text-[var(--ink-2)] leading-[1.65] line-clamp-2">{{ post.excerpt }}</p>
+          <div class="mt-4 text-[12px] text-[var(--ink-3)]">{{ post.published_at|date:"M j, Y" }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-20">
+      <p class="text-[var(--ink-3)]">No posts yet. Check back soon.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

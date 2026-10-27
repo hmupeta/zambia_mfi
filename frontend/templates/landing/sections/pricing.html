@@ -1,0 +1,65 @@
+{% load nimbus_icons %}
+<section {% if section.anchor %}id="{{ section.anchor }}"{% endif %} class="py-28 lg:py-32 bg-white scroll-mt-20">
+  <div class="max-w-[1280px] mx-auto px-6 lg:px-8">
+    <div class="max-w-3xl mb-16 reveal">
+      {% if section.eyebrow %}<div class="eyebrow mb-5">{{ section.eyebrow }}</div>{% endif %}
+      <h2 class="font-display text-[42px] sm:text-[56px] lg:text-[64px] leading-[1.02] text-[var(--ink)]">
+        {{ section.title }}
+      </h2>
+      {% if section.subtitle %}<p class="mt-6 text-[17px] text-[var(--ink-2)] leading-[1.7] max-w-2xl">{{ section.subtitle }}</p>{% endif %}
+    </div>
+
+    <div class="grid md:grid-cols-{{ section.visible_items|length|default:3 }} gap-6 max-w-[1100px]">
+      {% for item in section.visible_items %}
+      <div class="reveal reveal-d{{ forloop.counter }} relative rounded-2xl p-8 border transition-all duration-300
+                  {% if item.badge %}bg-[var(--ink)] text-white border-transparent shadow-[0_30px_60px_-20px_rgba(10,10,10,0.35)]{% else %}bg-white border-[var(--border)] hover:border-[var(--border-2)] hover:shadow-[0_20px_40px_-16px_rgba(10,10,10,0.1)]{% endif %}">
+
+        {% if item.badge %}
+        <div class="absolute -top-3 left-8 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider"
+             style="background: var(--accent); color: white;">
+          {{ item.badge }}
+        </div>
+        {% endif %}
+
+        <div class="flex items-baseline justify-between mb-6">
+          <h3 class="font-display text-[26px] {% if item.badge %}text-white{% else %}text-[var(--ink)]{% endif %}">{{ item.title }}</h3>
+          {% if not item.badge %}
+          <span class="text-[11px] font-mono uppercase tracking-wider text-[var(--ink-3)]">plan</span>
+          {% endif %}
+        </div>
+
+        {% if item.subtitle %}
+        <p class="text-[13.5px] {% if item.badge %}text-[#A1A1AA]{% else %}text-[var(--ink-2)]{% endif %} mb-6">{{ item.subtitle }}</p>
+        {% endif %}
+
+        <div class="pb-6 mb-6 border-b {% if item.badge %}border-white/10{% else %}border-[var(--border)]{% endif %}">
+          <div class="flex items-baseline gap-1">
+            <span class="font-display text-[46px] leading-none {% if item.badge %}text-white{% else %}text-[var(--ink)]{% endif %}">{{ item.metadata.price|default:"Custom" }}</span>
+            {% if item.metadata.period %}<span class="text-[13px] {% if item.badge %}text-[#71717A]{% else %}text-[var(--ink-3)]{% endif %}">{{ item.metadata.period }}</span>{% endif %}
+          </div>
+        </div>
+
+        <ul class="space-y-3 mb-8">
+          {% for f in item.metadata.features %}
+          <li class="flex items-start gap-3 text-[14px]">
+            <svg class="h-4 w-4 flex-shrink-0 mt-0.5 {% if item.badge %}text-[var(--accent)]{% else %}text-emerald-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span class="{% if item.badge %}text-[#D4D4D8]{% else %}text-[var(--ink-2)]{% endif %}">{{ f }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+
+        {% if item.cta_text %}
+        <a href="{{ item.cta_url|default:'#contact' }}"
+           class="block text-center py-3 px-5 rounded-xl font-medium text-[14px] transition
+                  {% if item.badge %}text-[var(--ink)] hover:opacity-90{% else %}border border-[var(--border-2)] text-[var(--ink)] hover:bg-[var(--cream)]{% endif %}"
+           {% if item.badge %}style="background: white;"{% endif %}>
+          {{ item.cta_text }}
+        </a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

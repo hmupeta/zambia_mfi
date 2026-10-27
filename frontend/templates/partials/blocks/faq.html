@@ -1,0 +1,23 @@
+<section class="py-20 bg-{% if block.background == 'cream' %}[var(--cream)]{% elif block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %}">
+  <div class="max-w-[840px] mx-auto px-6" x-data="{ open: 1 }">
+    {% if block.title %}
+    <h2 class="font-display text-[36px] sm:text-[48px] text-{% if block.background == 'dark' %}white{% else %}[var(--ink)]{% endif %} mb-10">{{ block.title }}</h2>
+    {% endif %}
+    <div class="border-t border-[var(--border)]">
+      {% for item in block.metadata.items %}
+      <div class="border-b border-[var(--border)]">
+        <button @click="open = open === {{ forloop.counter }} ? 0 : {{ forloop.counter }}"
+                class="w-full flex items-center justify-between gap-6 py-6 text-left">
+          <span class="font-display text-[20px] sm:text-[24px] {% if block.background == 'dark' %}text-white{% else %}text-[var(--ink)]{% endif %}">{{ item.question }}</span>
+          <svg :class="open === {{ forloop.counter }} ? 'rotate-45' : ''" class="h-4 w-4 transition-transform flex-shrink-0 {% if block.background == 'dark' %}text-[#A1A1AA]{% else %}text-[var(--ink-3)]{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+        </button>
+        <div x-show="open === {{ forloop.counter }}" x-collapse class="pb-6 -mt-1 text-[15px] leading-[1.75] {% if block.background == 'dark' %}text-[#A1A1AA]{% else %}text-[var(--ink-2)]{% endif %}">
+          {{ item.answer }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

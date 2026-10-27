@@ -1,0 +1,400 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Executive Dashboard — Nimbus{% endblock %}
+{% block page_title %}Executive Dashboard{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/echarts.min.js' %}"></script>
+<script>
+function executiveDashboard() {
+  return {
+    loading: true,
+    error: '',
+    lineChart: null,
+    parChart: null,
+    pieChart: null,
+    kycChart: null,
+
+    stats: {
+      total_clients: 0, active_loans: 0, total_disbursed: 0,
+      today_collections: 0, overdue_loans: 0,
+      new_clients_this_month: 0, par_30: 0,
+      cash_position: 0,
+      disbursed_mtd: 0, disbursed_last_month: 0, disbursement_growth_pct: 0,
+      collection_rate_pct: 0,
+      pipeline: { in_review_count: 0, in_review_value: 0, approved_count: 0, approved_value: 0 },
+      portfolio_aging: { current: 0, par_1_30: 0, par_31_60: 0, par_61_90: 0, par_90_plus: 0 },
+      savings_vs_loans: { loans: 0, savings: 0 },
+      kyc_stats: { verified: 0, unverified: 0, compliance_rate: 0 }
+    },
+
+    trend: { series: [], totals: { disbursed: 0, collected: 0 } },
+    trendRange: 30,
+    tasks: [],
+
+    async init() {
+      await Promise.all([
+        this.loadStats(),
+        this.loadTrend(),
+        this.loadTasks(),
+      ]);
+      this.loading = false;
+
+      window.addEventListener('resize', () => {
+        this.lineChart?.resize();
+        this.parChart?.resize();
+        this.pieChart?.resize();
+        this.kycChart?.resize();
+      });
+
+      this._poller = setInterval(() => {
+        this.loadStats();
+        this.loadTasks();
+      }, 60000);
+    },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+
+    async _fetchJSON(url) {
+      const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.getToken() } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+
+    async loadStats() {
+      try {
+        // Assuming your backend endpoint is mapped here
+        const data = await this._fetchJSON('/api/reports/dashboard/');
+        this.stats = { ...this.stats, ...data };
+        
+        if (data.pipeline)          this.stats.pipeline = { ...this.stats.pipeline, ...data.pipeline };
+        if (data.portfolio_aging)   this.stats.portfolio_aging = { ...this.stats.portfolio_aging, ...data.portfolio_aging };
+        if (data.savings_vs_loans)  this.stats.savings_vs_loans = { ...this.stats.savings_vs_loans, ...data.savings_vs_loans };
+        if (data.kyc_stats)         this.stats.kyc_stats = { ...this.stats.kyc_stats, ...data.kyc_stats };
+
+        await this.$nextTick();
+        this.renderParChart();
+        this.renderPieChart();
+        this.renderKycChart();
+      } catch (e) {
+        this.error = 'Could not load dashboard stats.';
+        console.error(e);
+      }
+    },
+
+    async loadTrend() {
+      try {
+        const data = await this._fetchJSON(`/api/reports/daily-trend/?days=${this.trendRange}`);
+        this.trend = data;
+        await this.$nextTick();
+        this.renderTrendChart();
+      } catch (e) { console.error('Trend load failed', e); }
+    },
+
+    async loadTasks() {
+      try {
+        this.tasks = (await this._fetchJSON('/api/origination/tasks/mine/') || []).slice(0, 5);
+      } catch (e) { console.error('Tasks load failed', e); }
+    },
+
+    async setRange(days) { this.trendRange = days; await this.loadTrend(); },
+
+    // --- Charts ---
+
+    renderTrendChart() {
+      const el = document.getElementById('trend-chart');
+      if (!el || !window.echarts) return;
+      if (this.lineChart) this.lineChart.dispose();
+      this.lineChart = window.echarts.init(el);
+
+      const series = this.trend?.series || [];
+      const labels = series.map(r => r.label || '');
+      const disbursed = series.map(r => Number(r.disbursed || 0));
+      const collected = series.map(r => Number(r.collected || 0));
+
+      this.lineChart.setOption({
+        grid: { left: 80, right: 20, top: 20, bottom: 40 },
+        tooltip: { 
+          trigger: 'axis', 
+          backgroundColor: '#0A0A0A',
+          padding: [8, 12],
+          textStyle: { color: '#FFF', fontSize: 12 },
+          formatter: (params) => {
+            const lines = params.map(p => `${p.marker} ${p.seriesName}: ${this.fmtMoney(p.value)}`);
+            return `<div style="color:#A1A1AA;font-size:11px;margin-bottom:4px">${params[0].name}</div>${lines.join('<br/>')}`;
+          }
+        },
+        legend: { bottom: 0, textStyle: { color: '#71717A', fontSize: 11 } },
+        xAxis: { 
+          type: 'category', 
+          data: labels, 
+          boundaryGap: false,
+          axisLine: { lineStyle: { color: 'rgba(10,10,10,0.08)' } },
+          axisLabel: { color: '#A1A1AA', fontSize: 11 } 
+        },
+        yAxis: { 
+          type: 'value', 
+          splitLine: { lineStyle: { color: 'rgba(10,10,10,0.06)', type: 'dashed' } },
+          axisLabel: { 
+            color: '#A1A1AA', 
+            fontSize: 11, 
+            formatter: (v) => v.toLocaleString('en-ZM') // FULL NUMBERS
+          } 
+        },
+        series: [
+          { name: 'Disbursed', type: 'line', smooth: true, data: disbursed, itemStyle: { color: '#B45309' }, areaStyle: { opacity: 0.1 } },
+          { name: 'Collected', type: 'line', smooth: true, data: collected, itemStyle: { color: '#047857' }, areaStyle: { opacity: 0.1 } }
+        ]
+      });
+    },
+
+    renderParChart() {
+      const el = document.getElementById('par-chart');
+      if (!el || !window.echarts) return;
+      if (this.parChart) this.parChart.dispose();
+      this.parChart = window.echarts.init(el);
+
+      const ag = this.stats.portfolio_aging || {};
+      this.parChart.setOption({
+        grid: { left: 80, right: 20, top: 20, bottom: 30 },
+        tooltip: { 
+          trigger: 'axis', 
+          backgroundColor: '#0A0A0A',
+          padding: [8, 12],
+          textStyle: { color: '#FFF', fontSize: 12 },
+          formatter: p => `${p[0].name}<br/>${p[0].marker} ${this.fmtMoney(p[0].value)}`
+        },
+        xAxis: { type: 'category', data: ['1-30', '31-60', '61-90', '90+'], axisLabel: { color: '#A1A1AA' } },
+        yAxis: { 
+          type: 'value', 
+          splitLine: { lineStyle: { color: 'rgba(10,10,10,0.06)', type: 'dashed' } },
+          axisLabel: { formatter: (v) => v.toLocaleString('en-ZM') } // FULL NUMBERS
+        },
+        series: [{
+          type: 'bar',
+          data: [
+            { value: ag.par_1_30 || 0, itemStyle: { color: '#CA8A04' } },
+            { value: ag.par_31_60 || 0, itemStyle: { color: '#EA580C' } },
+            { value: ag.par_61_90 || 0, itemStyle: { color: '#DC2626' } },
+            { value: ag.par_90_plus || 0, itemStyle: { color: '#991B1B' } }
+          ],
+          barWidth: '50%',
+          itemStyle: { borderRadius: [4, 4, 0, 0] }
+        }]
+      });
+    },
+
+    renderPieChart() {
+      const el = document.getElementById('pie-chart');
+      if (!el || !window.echarts) return;
+      if (this.pieChart) this.pieChart.dispose();
+      this.pieChart = window.echarts.init(el);
+
+      const sv = this.stats.savings_vs_loans || {};
+      this.pieChart.setOption({
+        tooltip: { trigger: 'item', formatter: p => `${p.name}: ${this.fmtMoney(p.value)}` },
+        legend: { bottom: 0, textStyle: { color: '#71717A', fontSize: 11 } },
+        series: [{
+          type: 'pie',
+          radius: ['50%', '70%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          data: [
+            { value: sv.loans || 0, name: 'Loans', itemStyle: { color: '#B45309' } },
+            { value: sv.savings || 0, name: 'Savings', itemStyle: { color: '#047857' } }
+          ]
+        }]
+      });
+    },
+
+    renderKycChart() {
+      const el = document.getElementById('kyc-chart');
+      if (!el || !window.echarts) return;
+      if (this.kycChart) this.kycChart.dispose();
+      this.kycChart = window.echarts.init(el);
+
+      const k = this.stats.kyc_stats || {};
+      const rate = (k.compliance_rate || 0).toFixed(0);
+      
+      this.kycChart.setOption({
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'pie',
+          radius: ['60%', '80%'],
+          label: { 
+            show: true, position: 'center', 
+            formatter: `{val|${rate}%}\n{sub|Verified}`, 
+            rich: {
+              val: { fontSize: 22, fontWeight: 'bold', color: '#0A0A0A', lineHeight: 30 },
+              sub: { fontSize: 11, color: '#71717A' }
+            }
+          },
+          data: [
+            { value: k.verified || 0, name: 'Verified', itemStyle: { color: '#047857' } },
+            { value: k.unverified || 0, name: 'Pending', itemStyle: { color: '#E4E4E7' } }
+          ]
+        }]
+      });
+    },
+
+    // --- Formatters ---
+    // FIXED: Complete figures with 2 decimals (e.g., K 68,579.00)
+    fmtMoney(v) {
+      const n = Number(v || 0);
+      return 'K ' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtNum(v) { return Number(v || 0).toLocaleString('en-ZM'); },
+
+    fmtRelative(iso) {
+      if (!iso) return '';
+      const d = new Date(iso), now = new Date();
+      const diffH = Math.round((d - now) / 36e5);
+      if (diffH < 0) return `${Math.abs(diffH)}h overdue`;
+      if (diffH < 24) return `Due in ${diffH}h`;
+      return `Due ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+    },
+
+    priorityColor(p) {
+      return { URGENT: '#DC2626', HIGH: '#EA580C', NORMAL: '#CA8A04', LOW: '#65A30D' }[p] || '#71717A';
+    },
+
+    taskHref(t) {
+      if (t.related_type === 'LOAN_APPLICATION') return '/app/applications/';
+      if (t.related_type === 'LOAN')             return '/app/loans/';
+      if (t.related_type === 'CLIENT')           return '/app/clients/';
+      if (t.related_type === 'PAYMENT')          return '/app/payments/';
+      return '/app/dashboard/';
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('executiveDashboard', executiveDashboard));
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="executiveDashboard" x-init="init()">
+
+  <div class="mb-8 flex items-start justify-between gap-6 flex-wrap">
+    <div>
+      <h2 class="font-display text-[32px] sm:text-[40px] leading-[1.05] tracking-tight">
+        Good morning.
+      </h2>
+      <p class="mt-2 text-[15px] text-[var(--ink-2)]">
+        Here's what's happening across your portfolio today.
+      </p>
+    </div>
+    <div class="flex items-center gap-2 text-[12px] text-[var(--ink-3)] font-mono">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      Live · refreshes every 60s
+    </div>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800" x-text="error"></div>
+
+  <!-- Row 1: Core KPIs -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active Clients</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtNum(stats.total_clients)"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Portfolio Value</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.total_disbursed)"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 30</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" :class="stats.par_30 > 5 ? 'text-red-600' : ''" x-text="(stats.par_30 || 0).toFixed(1) + '%'"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Collected Today</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.today_collections)"></p>
+    </div>
+  </div>
+
+  <!-- Row 2: Operations Health -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Cash Position</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.cash_position)"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Disbursed MTD</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.disbursed_mtd)"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Collection Rate MTD</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="(stats.collection_rate_pct || 0).toFixed(1) + '%'"></p>
+    </div>
+    <div class="card p-5 card-hover transition">
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Applications Pipeline</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="fmtNum(stats.pipeline.in_review_count)"></p>
+    </div>
+  </div>
+
+  <!-- Row 3: Charts & Tasks -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <div class="lg:col-span-2 card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="font-display text-[22px] tracking-tight">Disbursements & Collections</h3>
+        <div class="flex gap-1">
+          <button @click="setRange(7)" :class="trendRange === 7 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'" class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">7d</button>
+          <button @click="setRange(30)" :class="trendRange === 30 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'" class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">30d</button>
+          <button @click="setRange(90)" :class="trendRange === 90 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'" class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">90d</button>
+        </div>
+      </div>
+      <div id="trend-chart" class="h-72"></div>
+    </div>
+
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="font-display text-[22px] tracking-tight">Pending Tasks</h3>
+        <span class="pill pill-neutral" x-text="tasks.length + ' open'"></span>
+      </div>
+      <div class="space-y-3">
+        <template x-for="task in tasks" :key="task.id">
+          <a :href="taskHref(task)" class="flex items-start gap-3 p-3 rounded-lg hover:bg-[var(--cream)] transition">
+            <div class="w-2 h-2 rounded-full mt-2" :style="'background:' + priorityColor(task.priority)"></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[13.5px] font-medium truncate" x-text="task.title"></p>
+              <p class="text-[12px] text-[var(--ink-3)] mt-0.5">
+                <span x-text="task.assigned_to_name"></span> 
+                <template x-if="task.due_date">
+                  <span> · <span x-text="fmtRelative(task.due_date)"></span></span>
+                </template>
+              </p>
+            </div>
+          </a>
+        </template>
+        <div x-show="tasks.length === 0 && !loading" class="text-center py-10 text-[13.5px] text-[var(--ink-3)]">
+          You're all caught up.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: New Analytics Charts -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="card p-6">
+      <h3 class="font-display text-[18px] tracking-tight mb-2">Portfolio at Risk (Aging)</h3>
+      <p class="text-[12px] text-[var(--ink-3)] mb-4">Overdue amounts by days past due (DPD)</p>
+      <div id="par-chart" class="h-56"></div>
+    </div>
+    <div class="card p-6">
+      <h3 class="font-display text-[18px] tracking-tight mb-2">Loans vs Savings</h3>
+      <p class="text-[12px] text-[var(--ink-3)] mb-4">Total portfolio vs. group savings pool</p>
+      <div id="pie-chart" class="h-56"></div>
+    </div>
+    <div class="card p-6">
+      <h3 class="font-display text-[18px] tracking-tight mb-2">KYC Compliance</h3>
+      <p class="text-[12px] text-[var(--ink-3)] mb-4">Percentage of verified active clients</p>
+      <div id="kyc-chart" class="h-56"></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

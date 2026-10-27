@@ -1,0 +1,1254 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Client — Nimbus{% endblock %}
+{% block page_title %}Client Profile{% endblock %}
+
+{% block content %}
+<div x-data="clientDetailPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" with x_binding="client?.full_name || 'Client'" %}
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <div x-show="loading && !client" class="animate-pulse space-y-6">
+    <div class="h-48 rounded-2xl bg-[var(--cream)]"></div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+    </div>
+  </div>
+
+  <template x-if="client">
+    <div class="space-y-6">
+
+      <!-- ═══ Header ═══ -->
+      <div class="card p-6 lg:p-8">
+        <div class="flex items-start gap-5 flex-wrap">
+          <template x-if="client.photo_url">
+            <img :src="client.photo_url" class="w-20 h-20 rounded-2xl object-cover flex-shrink-0" />
+          </template>
+          <template x-if="!client.photo_url">
+            <div class="w-20 h-20 rounded-2xl flex items-center justify-center text-white font-display text-[32px] flex-shrink-0"
+                 style="background: var(--accent);"
+                 x-text="(client.first_name || '?')[0].toUpperCase()"></div>
+          </template>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <h2 class="font-display text-[28px] tracking-tight" x-text="client.full_name"></h2>
+              <span class="pill" :class="kycPill(client.kyc_status)"
+                    x-text="client.kyc_status_display || client.kyc_status"></span>
+              <span class="pill" :class="client.is_active ? 'pill-success' : 'pill-neutral'"
+                    x-text="client.is_active ? 'Active' : 'Inactive'"></span>
+            </div>
+            <p class="mt-2 text-[13.5px] font-mono text-[var(--ink-3)]">
+              NRC: <span x-text="client.nrc"></span>
+              <template x-if="client.branch_code">
+                <span> · Branch: <span x-text="client.branch_code"></span></span>
+              </template>
+              <span x-show="client.created_at"> · Since <span x-text="fmtDate(client.created_at)"></span></span>
+            </p>
+            <div class="mt-2 flex items-center gap-4 text-[12.5px] text-[var(--ink-2)] font-mono flex-wrap">
+              <a x-show="client.phone" :href="'tel:' + client.phone" class="hover:text-[var(--accent)] transition">
+                📞 <span x-text="client.phone"></span>
+              </a>
+              <a x-show="client.email" :href="'mailto:' + client.email" class="hover:text-[var(--accent)] transition">
+                ✉ <span x-text="client.email"></span>
+              </a>
+            </div>
+          </div>
+          <div class="flex gap-2 flex-shrink-0 flex-wrap">
+            <a x-show="client.phone" :href="'tel:' + client.phone"
+               class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">Call</a>
+            <a :href="'/app/clients/?edit=' + client.id"
+               class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">Edit</a>
+            <button x-show="activeLoans.length > 0"
+                    @click="openPayment()"
+                    class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+              </svg>
+              Record Payment
+            </button>
+            <a :href="'/app/loans/?client=' + client.id"
+               class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">New Loan</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ KPI cards ═══ -->
+      <template x-if="client.summary">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Loans</p>
+            <p class="text-[28px] font-display mt-1 tabular-nums" x-text="client.summary.total_loans"></p>
+            <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5"
+               x-text="client.summary.active_loans + ' active · ' + client.summary.closed_loans + ' closed'"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Borrowed</p>
+            <p class="text-[22px] font-mono mt-1 tabular-nums" x-text="fmtK(client.summary.total_borrowed)"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Repaid</p>
+            <p class="text-[22px] font-mono mt-1 tabular-nums text-emerald-700"
+               x-text="fmtK(client.summary.total_paid)"></p>
+            <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5">
+              <span x-text="repaymentRate"></span>% of borrowed
+            </p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Outstanding</p>
+            <p class="text-[22px] font-mono mt-1 tabular-nums"
+               :class="client.summary.outstanding > 0 ? 'text-red-700' : 'text-[var(--ink)]'"
+               x-text="fmtK(client.summary.outstanding)"></p>
+            <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5">
+              DPD: <span class="font-mono"
+                          :class="client.summary.current_dpd > 0 ? 'text-red-700 font-medium' : ''"
+                          x-text="client.summary.current_dpd"></span>
+            </p>
+          </div>
+        </div>
+      </template>
+
+      <!-- ═══ Tabs ═══ -->
+      <div class="flex flex-wrap gap-1 border-b border-[var(--border)]">
+        <template x-for="t in tabs" :key="t.key">
+          <button @click="tab = t.key"
+                  :class="tab === t.key ? 'border-[var(--accent)] text-[var(--ink)]' : 'border-transparent text-[var(--ink-3)] hover:text-[var(--ink-2)]'"
+                  class="px-4 py-2 text-[13px] font-medium border-b-2 transition -mb-px"
+                  x-text="t.label"></button>
+        </template>
+      </div>
+
+      <!-- OVERVIEW -->
+      <div x-show="tab === 'overview'">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="card p-6">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Personal Information</h3>
+            <dl class="space-y-3 text-[13.5px]">
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Full Name</dt>
+                <dd class="text-right font-medium" x-text="client.full_name"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">NRC</dt>
+                <dd class="text-right font-mono" x-text="client.nrc"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Gender</dt>
+                <dd class="text-right" x-text="client.gender || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Date of Birth</dt>
+                <dd class="text-right">
+                  <span class="font-mono" x-text="fmtDate(client.date_of_birth)"></span>
+                  <span x-show="age" class="text-[var(--ink-3)]" x-text="' · ' + age + ' yrs'"></span>
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Marital Status</dt>
+                <dd class="text-right" x-text="client.marital_status || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Occupation</dt>
+                <dd class="text-right" x-text="client.occupation || '—'"></dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="card p-6">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Contact & Location</h3>
+            <dl class="space-y-3 text-[13.5px]">
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Phone</dt>
+                <dd class="text-right"><a :href="'tel:' + client.phone" class="font-mono hover:text-[var(--accent)]" x-text="client.phone || '—'"></a></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Alt Phone</dt>
+                <dd class="text-right font-mono" x-text="client.alt_phone || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Email</dt>
+                <dd class="text-right" x-text="client.email || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">District</dt>
+                <dd class="text-right" x-text="client.district || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Province</dt>
+                <dd class="text-right" x-text="client.province || '—'"></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOANS -->
+      <div x-show="tab === 'loans'" class="card p-0 overflow-hidden">
+        <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <h3 class="font-display text-[18px] tracking-tight">Loan History</h3>
+          <span class="text-[11px] font-mono text-[var(--ink-3)]" x-text="loans.length + ' loans'"></span>
+        </div>
+        <div x-show="!loans.length" class="p-12 text-center text-[13px] text-[var(--ink-3)]">
+          This client has no loans yet.
+        </div>
+        <table x-show="loans.length > 0" class="w-full text-[13px]">
+          <thead class="border-b border-[var(--border)]">
+            <tr class="text-left text-[10.5px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+              <th class="px-4 py-2.5 font-medium">Loan #</th>
+              <th class="px-3 py-2.5 font-medium">Product</th>
+              <th class="px-3 py-2.5 font-medium text-right">Amount</th>
+              <th class="px-3 py-2.5 font-medium text-right">Balance</th>
+              <th class="px-3 py-2.5 font-medium">Status</th>
+              <th class="px-4 py-2.5 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[var(--border)]">
+            <template x-for="l in loans" :key="l.id">
+              <tr class="hover:bg-[var(--cream)] transition">
+                <td class="px-4 py-3 font-mono text-[12px] font-medium" x-text="l.loan_number"></td>
+                <td class="px-3 py-3 text-[12px] text-[var(--ink-2)]" x-text="l.product_name || '—'"></td>
+                <td class="px-3 py-3 text-right font-mono text-[12px]" x-text="fmtK(l.amount)"></td>
+                <td class="px-3 py-3 text-right font-mono font-medium" x-text="fmtK(l.balance_due)"></td>
+                <td class="px-3 py-3">
+                  <span class="pill" :class="loanStatusPill(l.status)" x-text="l.status_display || l.status"></span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <a :href="'/app/loans/' + l.id + '/'" class="text-[12.5px] text-[var(--accent)] hover:underline font-medium">View</a>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PAYMENTS -->
+      <div x-show="tab === 'payments'" class="card p-0 overflow-hidden">
+        <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <h3 class="font-display text-[18px] tracking-tight">Payment History</h3>
+          <button x-show="activeLoans.length > 0" @click="openPayment()"
+                  class="text-[12px] text-[var(--accent)] hover:underline font-medium">
+            + Record Payment
+          </button>
+        </div>
+        <div x-show="!payments.length" class="p-12 text-center text-[13px] text-[var(--ink-3)]">
+          No payments recorded.
+        </div>
+        <div x-show="payments.length > 0" class="divide-y divide-[var(--border)]">
+          <template x-for="p in payments" :key="p.id">
+            <div class="px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-[var(--cream)] transition"
+                 @click="window.location.href = '/app/payments/' + p.id + '/'">
+              <span class="font-mono text-[11.5px] text-[var(--ink-3)] w-[88px] flex-shrink-0"
+                    x-text="fmtDate(p.received_at)"></span>
+              <div class="flex-1 min-w-0">
+                <p class="text-[13px] font-medium truncate"
+                   x-text="p.payment_number || p.reference || p.loan_number || 'Payment'"></p>
+                <p class="text-[11.5px] text-[var(--ink-3)] font-mono"
+                   x-text="p.channel || p.payment_method || ''"></p>
+              </div>
+              <p class="font-mono font-medium text-emerald-700 flex-shrink-0"
+                 x-text="'+ ' + fmtK(p.amount)"></p>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- KYC -->
+      <div x-show="tab === 'kyc'" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="card p-6">
+          <h3 class="font-display text-[18px] tracking-tight mb-4">Verification</h3>
+          <div class="text-center py-4">
+            <div class="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3"
+                 :class="client.kyc_status === 'VERIFIED' ? 'bg-emerald-100' : 'bg-amber-100'">
+              <svg x-show="client.kyc_status === 'VERIFIED'" class="w-7 h-7 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              <svg x-show="client.kyc_status !== 'VERIFIED'" class="w-7 h-7 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <p class="font-display text-[20px] tracking-tight" x-text="client.kyc_status_display || client.kyc_status"></p>
+            <button @click="verifyKyc()" :disabled="actionBusy || client.kyc_status === 'VERIFIED'"
+                    x-show="client.kyc_status !== 'VERIFIED'"
+                    class="btn-primary w-full !py-2.5 !text-[13px] mt-5">Mark Verified</button>
+          </div>
+        </div>
+
+        <div class="card p-6 lg:col-span-2">
+          <h3 class="font-display text-[18px] tracking-tight mb-4">Identification Documents</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <template x-for="slot in [
+              {key: 'photo', label: 'Photo'},
+              {key: 'national_id_front', label: 'ID Front'},
+              {key: 'national_id_back', label: 'ID Back'}
+            ]" :key="slot.key">
+              <div>
+                <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-2" x-text="slot.label"></p>
+                <template x-if="client[slot.key]">
+                  <a :href="client[slot.key]" target="_blank"
+                     class="block aspect-[16/10] rounded-lg border border-[var(--border)] overflow-hidden hover:border-[var(--accent)] transition">
+                    <img :src="client[slot.key]" class="w-full h-full object-cover" />
+                  </a>
+                </template>
+                <template x-if="!client[slot.key]">
+                  <div class="aspect-[16/10] rounded-lg border-2 border-dashed border-[var(--border)] flex items-center justify-center text-[12px] text-[var(--ink-3)]">
+                    Not uploaded
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- GUARANTORS -->
+      <div x-show="tab === 'guarantors'" class="card p-0 overflow-hidden">
+        <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <div>
+            <h3 class="font-display text-[18px] tracking-tight">Guarantors</h3>
+            <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                  x-text="(client.guarantors || []).length + ' on file'"></span>
+          </div>
+          <button @click="openGuarantorCreate()" class="btn-primary !py-2 !px-4 !text-[13px] !w-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Add Guarantor
+          </button>
+        </div>
+
+        <div x-show="!(client.guarantors || []).length" class="p-12 text-center">
+          <p class="text-[13px] text-[var(--ink-3)] mb-4">No guarantors recorded yet.</p>
+          <button @click="openGuarantorCreate()" class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+            Add first guarantor
+          </button>
+        </div>
+
+        <div x-show="(client.guarantors || []).length" class="divide-y divide-[var(--border)]">
+          <template x-for="g in client.guarantors || []" :key="g.id">
+            <div class="px-5 py-4 group hover:bg-[var(--cream)] transition">
+              <div class="flex items-start gap-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0"
+                     style="background: var(--accent);"
+                     x-text="(g.name || '?')[0].toUpperCase()"></div>
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3 text-[13px]">
+                  <div>
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Name</p>
+                    <p class="font-medium" x-text="g.name"></p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">NRC</p>
+                    <p class="font-mono text-[12px]" x-text="g.nrc || '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Phone</p>
+                    <p class="font-mono text-[12px]" x-text="g.phone || '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Relationship</p>
+                    <p x-text="g.relationship || '—'"></p>
+                  </div>
+                  <div x-show="g.occupation">
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Occupation</p>
+                    <p x-text="g.occupation"></p>
+                  </div>
+                  <div x-show="g.monthly_income">
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Monthly Income</p>
+                    <p class="font-mono text-[12px]" x-text="fmtK(g.monthly_income)"></p>
+                  </div>
+                  <div class="md:col-span-2" x-show="g.address">
+                    <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Address</p>
+                    <p x-text="g.address"></p>
+                  </div>
+                </div>
+                <div class="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+                  <button @click="openGuarantorEdit(g)"
+                          class="p-2 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition"
+                          title="Edit">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                  </button>
+                  <button @click="deleteGuarantor(g)"
+                          class="p-2 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition"
+                          title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- DOCUMENTS -->
+      <div x-show="tab === 'documents'" class="card p-0 overflow-hidden">
+        <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <div>
+            <h3 class="font-display text-[18px] tracking-tight">Documents</h3>
+            <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                  x-text="(client.documents || []).length + ' files'"></span>
+          </div>
+          <button @click="openDocumentModal()" class="btn-primary !py-2 !px-4 !text-[13px] !w-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Upload Document
+          </button>
+        </div>
+
+        <div x-show="!(client.documents || []).length" class="p-12 text-center">
+          <p class="text-[13px] text-[var(--ink-3)] mb-4">No documents uploaded.</p>
+          <button @click="openDocumentModal()" class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+            Upload first document
+          </button>
+        </div>
+
+        <div x-show="(client.documents || []).length" class="divide-y divide-[var(--border)]">
+          <template x-for="d in client.documents || []" :key="d.id">
+            <div class="px-5 py-3 group hover:bg-[var(--cream)] transition flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center bg-[var(--cream)] flex-shrink-0">
+                <svg class="w-5 h-5 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[13.5px] font-medium" x-text="d.document_type"></p>
+                <p class="text-[11.5px] text-[var(--ink-3)] font-mono"
+                   x-text="'Uploaded ' + fmtDate(d.uploaded_at)"></p>
+              </div>
+              <div class="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+                <a :href="d.file_url" target="_blank"
+                   class="p-2 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition"
+                   title="View">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                </a>
+                <button @click="deleteDocument(d)"
+                        class="p-2 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition"
+                        title="Delete">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- PAYMENT CHANNELS -->
+      <div x-show="tab === 'channels'" class="card p-0 overflow-hidden">
+        <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <div>
+            <h3 class="font-display text-[18px] tracking-tight">Payment Channels</h3>
+            <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                  x-text="(client.payment_channels || []).length + ' registered'"></span>
+          </div>
+          <button @click="openChannelCreate()" class="btn-primary !py-2 !px-4 !text-[13px] !w-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Add Channel
+          </button>
+        </div>
+
+        <div x-show="!(client.payment_channels || []).length" class="p-12 text-center">
+          <p class="text-[13px] text-[var(--ink-3)] mb-4">No payment channels registered.</p>
+          <button @click="openChannelCreate()" class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+            Add first channel
+          </button>
+        </div>
+
+        <div x-show="(client.payment_channels || []).length" class="divide-y divide-[var(--border)]">
+          <template x-for="pc in client.payment_channels || []" :key="pc.id">
+            <div class="px-5 py-3 group hover:bg-[var(--cream)] transition flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center bg-[var(--cream)] flex-shrink-0">
+                <svg class="w-5 h-5 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="text-[13.5px] font-medium" x-text="pc.channel_type"></p>
+                  <span x-show="pc.is_default" class="pill pill-info text-[10px]">Default</span>
+                  <span x-show="pc.is_verified" class="pill pill-success text-[10px]">Verified</span>
+                </div>
+                <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate"
+                   x-text="pc.account_number + (pc.account_name ? ' · ' + pc.account_name : '')"></p>
+              </div>
+              <div class="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+                <button @click="openChannelEdit(pc)"
+                        class="p-2 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition"
+                        title="Edit">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                </button>
+                <button @click="deleteChannel(pc)"
+                        class="p-2 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition"
+                        title="Delete">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Record meta -->
+      <div class="card p-5">
+        <h3 class="font-display text-[16px] tracking-tight mb-3">Record</h3>
+        <dl class="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12.5px]">
+          <div><dt class="text-[var(--ink-3)]">Created</dt><dd class="font-mono mt-0.5" x-text="fmtDate(client.created_at)"></dd></div>
+          <div><dt class="text-[var(--ink-3)]">Updated</dt><dd class="font-mono mt-0.5" x-text="fmtDate(client.updated_at)"></dd></div>
+          <div><dt class="text-[var(--ink-3)]">Created By</dt><dd class="mt-0.5" x-text="client.created_by_name || '—'"></dd></div>
+          <div><dt class="text-[var(--ink-3)]">Branch</dt><dd class="font-mono mt-0.5" x-text="client.branch_code || '—'"></dd></div>
+        </dl>
+      </div>
+    </div>
+  </template>
+
+  <!-- ═══ GUARANTOR MODAL ═══ -->
+  <div x-show="gModal" x-cloak @keydown.escape.window="gModal=false"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="gModal=false"
+         class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <h3 class="font-display text-[20px] tracking-tight"
+            x-text="gForm.id ? 'Edit Guarantor' : 'Add Guarantor'"></h3>
+        <button @click="gModal=false" class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4">
+        <div>
+          <label class="label">Full Name <span class="text-red-500">*</span></label>
+          <input type="text" x-model="gForm.name" class="input" required />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="label">NRC</label>
+            <input type="text" x-model="gForm.nrc" class="input font-mono" placeholder="123456-78-9" />
+          </div>
+          <div>
+            <label class="label">Phone</label>
+            <input type="tel" x-model="gForm.phone" class="input font-mono" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Relationship</label>
+            <select x-model="gForm.relationship" class="input">
+              <option value="">—</option>
+              <option value="SPOUSE">Spouse</option>
+              <option value="PARENT">Parent</option>
+              <option value="SIBLING">Sibling</option>
+              <option value="CHILD">Child</option>
+              <option value="FRIEND">Friend</option>
+              <option value="COLLEAGUE">Colleague</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Occupation</label>
+            <input type="text" x-model="gForm.occupation" class="input" />
+          </div>
+        </div>
+        <div>
+          <label class="label">Monthly Income (ZMW)</label>
+          <input type="number" step="0.01" x-model="gForm.monthly_income" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Address</label>
+          <textarea x-model="gForm.address" rows="2" class="input"></textarea>
+        </div>
+
+        <div x-show="gError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="gError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="gModal=false" :disabled="gSaving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">Cancel</button>
+        <button @click="saveGuarantor()" :disabled="gSaving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="gSaving ? 'Saving…' : (gForm.id ? 'Save Changes' : 'Add Guarantor')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DOCUMENT MODAL ═══ -->
+  <div x-show="dModal" x-cloak @keydown.escape.window="dModal=false"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="dModal=false"
+         class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <h3 class="font-display text-[20px] tracking-tight">Upload Document</h3>
+        <button @click="dModal=false" class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="label">Document Type <span class="text-red-500">*</span></label>
+          <select x-model="dForm.document_type" class="input">
+            <option value="">— Select —</option>
+            <option value="NRC">NRC</option>
+            <option value="PASSPORT">Passport</option>
+            <option value="DRIVERS_LICENSE">Driver's License</option>
+            <option value="PAYSLIP">Payslip</option>
+            <option value="BANK_STATEMENT">Bank Statement</option>
+            <option value="TITLE_DEED">Title Deed</option>
+            <option value="CONTRACT">Contract</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">File <span class="text-red-500">*</span></label>
+          <input type="file" @change="onDocFile($event)" class="input !py-2"
+                 accept="image/*,application/pdf" />
+          <p x-show="dForm.file" class="text-[11px] text-[var(--ink-3)] mt-1">
+            Selected: <span x-text="dForm.file?.name"></span>
+          </p>
+        </div>
+
+        <div x-show="dError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="dError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="dModal=false" :disabled="dSaving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">Cancel</button>
+        <button @click="saveDocument()" :disabled="dSaving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="dSaving ? 'Uploading…' : 'Upload'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAYMENT CHANNEL MODAL ═══ -->
+  <div x-show="pcModal" x-cloak @keydown.escape.window="pcModal=false"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="pcModal=false"
+         class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <h3 class="font-display text-[20px] tracking-tight"
+            x-text="pcForm.id ? 'Edit Payment Channel' : 'Add Payment Channel'"></h3>
+        <button @click="pcModal=false" class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="label">Channel Type <span class="text-red-500">*</span></label>
+          <select x-model="pcForm.channel_type" class="input">
+            <option value="">— Select —</option>
+            <option value="BANK">Bank Account</option>
+            <option value="MOBILE_MONEY">Mobile Money</option>
+            <option value="CASH">Cash</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Account Number <span class="text-red-500">*</span></label>
+          <input type="text" x-model="pcForm.account_number" class="input font-mono"
+                 placeholder="Account or phone number" />
+        </div>
+        <div>
+          <label class="label">Account Name</label>
+          <input type="text" x-model="pcForm.account_name" class="input"
+                 placeholder="Registered holder name" />
+        </div>
+        <div class="flex items-center gap-6 pt-2">
+          <label class="flex items-center gap-2 cursor-pointer text-[13.5px]">
+            <input type="checkbox" x-model="pcForm.is_default" class="w-4 h-4" />
+            Set as default
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer text-[13.5px]">
+            <input type="checkbox" x-model="pcForm.is_verified" class="w-4 h-4" />
+            Verified
+          </label>
+        </div>
+
+        <div x-show="pcError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="pcError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="pcModal=false" :disabled="pcSaving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">Cancel</button>
+        <button @click="saveChannel()" :disabled="pcSaving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="pcSaving ? 'Saving…' : (pcForm.id ? 'Save Changes' : 'Add Channel')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RECORD PAYMENT MODAL ═══ -->
+  <div x-show="paymentModal" x-cloak
+       @keydown.escape.window="closePayment()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="closePayment()"
+         class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <div>
+          <h3 class="font-display text-[20px] tracking-tight">Record Payment</h3>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5"
+             x-text="'For ' + (client?.full_name || '')"></p>
+        </div>
+        <button @click="closePayment()"
+                class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4">
+
+        <!-- Loan selector -->
+        <div>
+          <label class="label">Loan <span class="text-red-500">*</span></label>
+          <select x-model="paymentForm.loan" @change="onPaymentLoanChange()" class="input">
+            <option value="">— Select a loan —</option>
+            <template x-for="l in activeLoans" :key="l.id">
+              <option :value="l.id"
+                      x-text="l.loan_number + ' · Balance ' + fmtK(l.balance_due)"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- Amount + method -->
+        <div class="grid grid-cols-2 gap-4" x-show="paymentForm.loan">
+          <div>
+            <label class="label">Amount (ZMW) <span class="text-red-500">*</span></label>
+            <input type="number" step="0.01" min="0.01"
+                   x-model="paymentForm.amount"
+                   @input.debounce.400ms="previewPayment()"
+                   class="input font-mono" />
+          </div>
+          <div>
+            <label class="label">Method <span class="text-red-500">*</span></label>
+            <select x-model="paymentForm.payment_method" class="input">
+              <option value="CASH">Cash</option>
+              <option value="MTN_MOMO">MTN Mobile Money</option>
+              <option value="AIRTEL_MONEY">Airtel Money</option>
+              <option value="BANK">Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+
+        <div x-show="paymentForm.loan">
+          <label class="label">Transaction Reference</label>
+          <input type="text" x-model="paymentForm.transaction_ref" class="input font-mono"
+                 placeholder="Optional" />
+        </div>
+
+        <div x-show="paymentForm.loan">
+          <label class="label">Notes</label>
+          <textarea x-model="paymentForm.notes" rows="2" class="input" placeholder="Optional"></textarea>
+        </div>
+
+        <div x-show="paymentForm.loan" class="flex gap-2 flex-wrap">
+          <button type="button" @click="setFullBalance()"
+                  class="text-[12px] px-3 py-1.5 rounded-lg bg-[var(--cream)] border border-[var(--border)] hover:border-[var(--border-2)] transition">
+            Full balance
+          </button>
+        </div>
+
+        <!-- Allocation preview -->
+        <div x-show="paymentPreview?.plan?.length" x-cloak class="card p-4 bg-[var(--cream)] !border-0">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-[13px] font-medium">Allocation Preview</h4>
+            <span class="text-[11.5px] font-mono"
+                  :class="paymentPreview.unallocated > 0 ? 'text-amber-700' : 'text-emerald-700'">
+              <span x-text="fmtK(paymentPreview.allocated)"></span> allocated
+            </span>
+          </div>
+          <table class="w-full text-[11.5px]">
+            <thead>
+              <tr class="text-left text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono border-b border-[var(--border)]">
+                <th class="py-1 font-medium">#</th>
+                <th class="py-1 font-medium text-right">Penalty</th>
+                <th class="py-1 font-medium text-right">Interest</th>
+                <th class="py-1 font-medium text-right">Principal</th>
+                <th class="py-1 font-medium text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in paymentPreview.plan" :key="row.installment_id">
+                <tr class="border-b border-[var(--border)] last:border-0">
+                  <td class="py-1 font-mono" x-text="'#' + row.installment_no"></td>
+                  <td class="py-1 text-right font-mono" x-text="row.penalty > 0 ? fmtK(row.penalty) : '—'"></td>
+                  <td class="py-1 text-right font-mono" x-text="row.interest > 0 ? fmtK(row.interest) : '—'"></td>
+                  <td class="py-1 text-right font-mono" x-text="row.principal > 0 ? fmtK(row.principal) : '—'"></td>
+                  <td class="py-1 text-right font-mono font-medium" x-text="fmtK(row.subtotal)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div x-show="paymentError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="paymentError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="closePayment()" :disabled="paymentSaving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">
+          Cancel
+        </button>
+        <button @click="submitPayment()"
+                :disabled="paymentSaving || !paymentForm.loan || !paymentForm.amount"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="paymentSaving ? 'Recording…' : 'Record Payment'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function clientDetailPage() {
+  const API = '/api/clients/admin';
+  const SUB = '/api/clients';
+  const CLIENT_ID = '{{ client_id }}';
+
+  return {
+    client: null,
+    loans: [], payments: [],
+    loading: false, error: '', message: '', messageType: 'success', actionBusy: false,
+    tab: 'overview',
+
+    tabs: [
+      { key: 'overview',   label: 'Overview' },
+      { key: 'loans',      label: 'Loans' },
+      { key: 'payments',   label: 'Payments' },
+      { key: 'kyc',        label: 'KYC' },
+      { key: 'guarantors', label: 'Guarantors' },
+      { key: 'documents',  label: 'Documents' },
+      { key: 'channels',   label: 'Payment Channels' },
+    ],
+
+    // Guarantor
+    gModal: false, gSaving: false, gError: '',
+    gForm: { id: null, name: '', nrc: '', phone: '', relationship: '', occupation: '', monthly_income: '', address: '' },
+
+    // Document
+    dModal: false, dSaving: false, dError: '',
+    dForm: { document_type: '', file: null },
+
+    // Payment Channel
+    pcModal: false, pcSaving: false, pcError: '',
+    pcForm: { id: null, channel_type: '', account_number: '', account_name: '', is_default: false, is_verified: false },
+
+    // Record Payment
+    paymentModal: false,
+    paymentSaving: false,
+    paymentError: '',
+    paymentPreview: null,
+    paymentForm: {
+      loan: '',
+      amount: '',
+      payment_method: 'CASH',
+      transaction_ref: '',
+      notes: '',
+    },
+
+    async init() { await this.load(); },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + this.getToken(), ...extra }; },
+
+    get age() {
+      if (!this.client?.date_of_birth) return null;
+      const d = new Date(this.client.date_of_birth), t = new Date();
+      let a = t.getFullYear() - d.getFullYear();
+      const m = t.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && t.getDate() < d.getDate())) a--;
+      return a;
+    },
+
+    get repaymentRate() {
+      const s = this.client?.summary;
+      if (!s || !s.total_borrowed) return 0;
+      return Math.round((s.total_paid / s.total_borrowed) * 100);
+    },
+
+    get activeLoans() {
+      return (this.loans || []).filter(l => !l.is_fully_repaid);
+    },
+
+    async load() {
+      this.loading = true;
+      try {
+        const [clientR, loansR, paymentsR] = await Promise.all([
+          fetch(`${API}/${CLIENT_ID}/`, { headers: this.authHeaders() }),
+          fetch(`${API}/${CLIENT_ID}/loans/`, { headers: this.authHeaders() }),
+          fetch(`${API}/${CLIENT_ID}/payments/`, { headers: this.authHeaders() }),
+        ]);
+        if (!clientR.ok) throw new Error('Client not found.');
+        this.client = await clientR.json();
+        this.loans = loansR.ok ? await loansR.json() : [];
+        this.payments = paymentsR.ok ? await paymentsR.json() : [];
+      } catch (e) { this.error = e.message; }
+      finally { this.loading = false; }
+    },
+
+    async verifyKyc() {
+      if (!confirm('Mark KYC as verified for this client?')) return;
+      this.actionBusy = true;
+      try {
+        const r = await fetch(`${API}/${CLIENT_ID}/verify_kyc/`, { method: 'POST', headers: this.authHeaders() });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'Failed'); }
+        this.flash('KYC verified.');
+        await this.load();
+      } catch (e) { this.flash(e.message, 'error'); }
+      finally { this.actionBusy = false; }
+    },
+
+    // ─── RECORD PAYMENT ──────────────────────────────
+    openPayment() {
+      this.paymentModal = true;
+      this.paymentError = '';
+      this.paymentPreview = null;
+      const first = this.activeLoans[0];
+      this.paymentForm = {
+        loan: first?.id || '',
+        amount: '',
+        payment_method: 'CASH',
+        transaction_ref: '',
+        notes: '',
+      };
+    },
+
+    closePayment() {
+      this.paymentModal = false;
+      this.paymentError = '';
+      this.paymentPreview = null;
+    },
+
+    onPaymentLoanChange() {
+      this.paymentPreview = null;
+      if (this.paymentForm.amount) this.previewPayment();
+    },
+
+    setFullBalance() {
+      const loan = this.activeLoans.find(l => l.id === this.paymentForm.loan);
+      if (!loan) return;
+      this.paymentForm.amount = parseFloat(loan.balance_due || 0).toFixed(2);
+      this.previewPayment();
+    },
+
+    async previewPayment() {
+      const amount = parseFloat(this.paymentForm.amount);
+      if (!amount || amount <= 0 || !this.paymentForm.loan) {
+        this.paymentPreview = null;
+        return;
+      }
+      try {
+        const r = await fetch(
+          `/api/payments/admin/preview/?loan=${this.paymentForm.loan}&amount=${amount}`,
+          { headers: this.authHeaders() }
+        );
+        if (r.ok) this.paymentPreview = await r.json();
+      } catch (_) {}
+    },
+
+    async submitPayment() {
+      this.paymentSaving = true;
+      this.paymentError = '';
+      try {
+        const amount = parseFloat(this.paymentForm.amount);
+        if (!amount || amount <= 0) throw new Error('Enter an amount greater than zero.');
+        if (!this.paymentForm.loan) throw new Error('Select a loan.');
+
+        const r = await fetch('/api/payments/admin/', {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            loan: this.paymentForm.loan,
+            amount: amount,
+            payment_method: this.paymentForm.payment_method,
+            payment_type: 'INSTALLMENT',
+            transaction_ref: this.paymentForm.transaction_ref,
+            notes: this.paymentForm.notes,
+          }),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = err.error || err.detail
+            || Object.entries(err).map(([k, v]) =>
+                 `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+               ).join(' · ')
+            || 'Payment failed.';
+          throw new Error(msg);
+        }
+
+        this.paymentModal = false;
+        this.flash('Payment recorded successfully.');
+        await this.load();
+      } catch (e) {
+        this.paymentError = e.message;
+      } finally {
+        this.paymentSaving = false;
+      }
+    },
+
+    // ─── GUARANTORS ──────────────────────────────────
+    openGuarantorCreate() {
+      this.gError = '';
+      this.gForm = { id: null, name: '', nrc: '', phone: '', relationship: '', occupation: '', monthly_income: '', address: '' };
+      this.gModal = true;
+    },
+
+    openGuarantorEdit(g) {
+      this.gError = '';
+      this.gForm = {
+        id: g.id, name: g.name || '', nrc: g.nrc || '', phone: g.phone || '',
+        relationship: g.relationship || '', occupation: g.occupation || '',
+        monthly_income: g.monthly_income || '', address: g.address || '',
+      };
+      this.gModal = true;
+    },
+
+    async saveGuarantor() {
+      this.gError = '';
+      if (!this.gForm.name?.trim()) { this.gError = 'Name is required.'; return; }
+
+      this.gSaving = true;
+      try {
+        const isEdit = !!this.gForm.id;
+        const url = isEdit ? `${SUB}/guarantors/${this.gForm.id}/` : `${SUB}/guarantors/`;
+        const payload = { ...this.gForm, client: CLIENT_ID };
+        delete payload.id;
+
+        const r = await fetch(url, {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = Object.entries(err).map(([k, v]) =>
+            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+          ).join(' · ') || 'Save failed';
+          throw new Error(msg);
+        }
+
+        this.gModal = false;
+        this.flash(isEdit ? 'Guarantor updated.' : 'Guarantor added.');
+        await this.load();
+      } catch (e) { this.gError = e.message; }
+      finally { this.gSaving = false; }
+    },
+
+    async deleteGuarantor(g) {
+      if (!confirm(`Remove guarantor "${g.name}"?`)) return;
+      try {
+        const r = await fetch(`${SUB}/guarantors/${g.id}/`, {
+          method: 'DELETE', headers: this.authHeaders(),
+        });
+        if (!r.ok && r.status !== 204) throw new Error('Delete failed');
+        this.flash('Guarantor removed.');
+        await this.load();
+      } catch (e) { this.flash(e.message, 'error'); }
+    },
+
+    // ─── DOCUMENTS ───────────────────────────────────
+    openDocumentModal() {
+      this.dError = '';
+      this.dForm = { document_type: '', file: null };
+      this.dModal = true;
+    },
+
+    onDocFile(e) {
+      const f = e.target.files[0];
+      if (f) this.dForm.file = f;
+    },
+
+    async saveDocument() {
+      this.dError = '';
+      if (!this.dForm.document_type) { this.dError = 'Document type is required.'; return; }
+      if (!this.dForm.file) { this.dError = 'Please select a file.'; return; }
+
+      this.dSaving = true;
+      try {
+        const fd = new FormData();
+        fd.append('client', CLIENT_ID);
+        fd.append('document_type', this.dForm.document_type);
+        fd.append('file', this.dForm.file);
+
+        const r = await fetch(`${SUB}/documents/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+          body: fd,
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = Object.entries(err).map(([k, v]) =>
+            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+          ).join(' · ') || 'Upload failed';
+          throw new Error(msg);
+        }
+
+        this.dModal = false;
+        this.flash('Document uploaded.');
+        await this.load();
+      } catch (e) { this.dError = e.message; }
+      finally { this.dSaving = false; }
+    },
+
+    async deleteDocument(d) {
+      if (!confirm(`Delete "${d.document_type}"?`)) return;
+      try {
+        const r = await fetch(`${SUB}/documents/${d.id}/`, {
+          method: 'DELETE', headers: this.authHeaders(),
+        });
+        if (!r.ok && r.status !== 204) throw new Error('Delete failed');
+        this.flash('Document deleted.');
+        await this.load();
+      } catch (e) { this.flash(e.message, 'error'); }
+    },
+
+    // ─── PAYMENT CHANNELS ────────────────────────────
+    openChannelCreate() {
+      this.pcError = '';
+      this.pcForm = { id: null, channel_type: '', account_number: '', account_name: '', is_default: false, is_verified: false };
+      this.pcModal = true;
+    },
+
+    openChannelEdit(pc) {
+      this.pcError = '';
+      this.pcForm = {
+        id: pc.id, channel_type: pc.channel_type || '',
+        account_number: pc.account_number || '',
+        account_name: pc.account_name || '',
+        is_default: !!pc.is_default, is_verified: !!pc.is_verified,
+      };
+      this.pcModal = true;
+    },
+
+    async saveChannel() {
+      this.pcError = '';
+      if (!this.pcForm.channel_type) { this.pcError = 'Channel type is required.'; return; }
+      if (!this.pcForm.account_number) { this.pcError = 'Account number is required.'; return; }
+
+      this.pcSaving = true;
+      try {
+        const isEdit = !!this.pcForm.id;
+        const url = isEdit ? `${SUB}/payment-channels/${this.pcForm.id}/` : `${SUB}/payment-channels/`;
+        const payload = { ...this.pcForm, client: CLIENT_ID };
+        delete payload.id;
+
+        const r = await fetch(url, {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = Object.entries(err).map(([k, v]) =>
+            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+          ).join(' · ') || 'Save failed';
+          throw new Error(msg);
+        }
+
+        this.pcModal = false;
+        this.flash(isEdit ? 'Channel updated.' : 'Channel added.');
+        await this.load();
+      } catch (e) { this.pcError = e.message; }
+      finally { this.pcSaving = false; }
+    },
+
+    async deleteChannel(pc) {
+      if (!confirm(`Delete "${pc.channel_type} · ${pc.account_number}"?`)) return;
+      try {
+        const r = await fetch(`${SUB}/payment-channels/${pc.id}/`, {
+          method: 'DELETE', headers: this.authHeaders(),
+        });
+        if (!r.ok && r.status !== 204) throw new Error('Delete failed');
+        this.flash('Channel deleted.');
+        await this.load();
+      } catch (e) { this.flash(e.message, 'error'); }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg; this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    kycPill(s) {
+      return { VERIFIED: 'pill-success', PENDING: 'pill-warning', IN_REVIEW: 'pill-info',
+               SUBMITTED: 'pill-info', REJECTED: 'pill-danger', EXPIRED: 'pill-neutral' }[s] || 'pill-neutral';
+    },
+
+    loanStatusPill(s) {
+      return { ACTIVE: 'pill-success', DISBURSED: 'pill-info', CLOSED: 'pill-neutral',
+               WRITTEN_OFF: 'pill-danger', RESTRUCTURED: 'pill-warning',
+               APPROVED: 'pill-info', PENDING: 'pill-neutral', DRAFT: 'pill-neutral' }[s] || 'pill-neutral';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('clientDetailPage', clientDetailPage);
+});
+</script>
+{% endblock %}

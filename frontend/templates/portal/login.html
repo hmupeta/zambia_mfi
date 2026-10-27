@@ -1,0 +1,62 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — Nimbus</title>
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}" />
+  <style>
+    * { -webkit-font-smoothing: antialiased; box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: #0A0A0A; background: #FAF7F2; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .font-display { font-family: Georgia, 'Instrument Serif', serif; font-weight: 400; letter-spacing: -0.02em; }
+    .input { width: 100%; padding: 0.85rem 1rem; border: 1px solid rgba(10,10,10,0.12); border-radius: 0.75rem; font-size: 0.95rem; background: white; transition: all 0.15s ease; font-family: inherit; box-sizing: border-box; }
+    .input:focus { outline: none; border-color: #B45309; box-shadow: 0 0 0 4px rgba(180,83,9,0.12); }
+    .btn-primary { width: 100%; padding: 0.9rem; background: #0A0A0A; color: white; font-weight: 500; font-size: 0.95rem; border-radius: 0.75rem; cursor: pointer; border: none; transition: all 0.2s ease; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(10,10,10,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div style="width: 100%; max-width: 420px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <div style="display: inline-flex; width: 56px; height: 56px; border-radius: 14px; align-items: center; justify-content: center; background: #0A0A0A; margin-bottom: 16px;">
+        <svg width="24" height="24" viewBox="0 0 40 40" fill="none">
+          <path d="M12 28V12L28 28V12" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="font-display" style="font-size: 28px; margin: 0;">Welcome back</h1>
+      <p style="color: #71717A; font-size: 14px; margin-top: 8px;">Sign in to your account</p>
+    </div>
+
+    <div style="background: white; border: 1px solid rgba(10,10,10,0.08); border-radius: 1rem; padding: 28px; box-shadow: 0 4px 24px -12px rgba(10,10,10,0.08);">
+
+      {% if error %}
+        <div style="background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; padding: 12px 16px; border-radius: 10px; font-size: 13.5px; margin-bottom: 20px;">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #71717A; margin-bottom: 6px; font-family: ui-monospace, monospace;">Phone Number</label>
+          {{ form.phone }}
+        </div>
+
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #71717A; margin-bottom: 6px; font-family: ui-monospace, monospace;">Password</label>
+          {{ form.password }}
+        </div>
+
+        <button type="submit" class="btn-primary">Sign in</button>
+      </form>
+    </div>
+
+    <p style="text-align: center; font-size: 12px; color: #71717A; margin-top: 24px;">
+      Forgot your password? Visit your nearest branch.
+    </p>
+  </div>
+</body>
+</html>

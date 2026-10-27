@@ -1,0 +1,393 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Journal Entries — Nimbus{% endblock %}
+{% block page_title %}Journal Entries{% endblock %}
+
+{% block content %}
+<div x-data="journalEntries()" x-init="init()">
+
+  <!-- Breadcrumb -->
+  <nav class="mb-6 flex items-center gap-2 text-[13px] text-[var(--ink-3)]" aria-label="Breadcrumb">
+    <a href="/app/dashboard/" class="hover:text-[var(--accent)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <a href="/app/accounting/" class="hover:text-[var(--accent)] transition">Accounting</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Journal Entries</span>
+  </nav>
+
+  <!-- Top Toolbar -->
+  <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
+    <p class="text-[14px] text-[var(--ink-2)]">
+      <span x-text="total"></span> journal entries
+    </p>
+    <div class="flex gap-2">
+      <a href="/app/accounting/"
+         class="px-4 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+        Chart of Accounts
+      </a>
+      <button @click="openModal()"
+              class="px-4 py-2.5 text-[13.5px] font-medium rounded-xl bg-[var(--ink)] text-white hover:opacity-90 transition flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        New Entry
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="md:col-span-2 relative">
+        <svg class="absolute left-3 top-3 h-4 w-4 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" x-model.debounce.400ms="search" @input="reload()"
+               placeholder="Search by reference, description..."
+               class="input pl-9" />
+      </div>
+
+      <select x-model="sourceFilter" @change="reload()" class="input">
+        <option value="">All Source Types</option>
+        <option value="Loan">Loan</option>
+        <option value="Payment">Payment</option>
+        <option value="Expense">Expense</option>
+        <option value="Provision">Provision</option>
+        <option value="Restructure">Restructure</option>
+        <option value="Manual">Manual</option>
+      </select>
+
+      <select x-model="ordering" @change="reload()" class="input">
+        <option value="-entry_date">Newest first</option>
+        <option value="entry_date">Oldest first</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Data Table -->
+  <div x-show="loading" class="card p-6 space-y-3">
+    <template x-for="i in 6" :key="i">
+      <div class="h-5 rounded bg-[var(--border)] animate-pulse"></div>
+    </template>
+  </div>
+
+  <div x-show="!loading" x-cloak class="card overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-28">Date</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Reference</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Description</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Source</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Amount</th>
+          <th class="w-12"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="je in entries" :key="je.id">
+          <tr class="border-t border-[var(--border)] hover:bg-[var(--cream)]/50 transition cursor-pointer"
+              @click="goTo(je.id)">
+            <td class="px-5 py-3 text-[12.5px] font-mono" x-text="fmtDate(je.entry_date)"></td>
+            <td class="px-5 py-3 font-mono text-[12.5px] font-medium" x-text="je.reference"></td>
+            <td class="px-5 py-3 text-[13px] text-[var(--ink-2)] truncate max-w-md" x-text="je.description"></td>
+            <td class="px-5 py-3">
+              <span class="pill pill-neutral" x-text="je.source_type || '—'"></span>
+            </td>
+            <td class="px-5 py-3 text-right tabular-nums text-[13.5px] font-medium"
+                x-text="fmtMoney(je.total_debit || je.total_credit)"></td>
+            <td class="px-3 py-3 text-right">
+              <svg class="w-4 h-4 text-[var(--ink-4)] inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="entries.length === 0" class="border-t border-[var(--border)]">
+          <td colspan="6" class="px-5 py-12 text-center text-[13.5px] text-[var(--ink-3)]">
+            No journal entries found.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div x-show="!loading && totalPages > 1" x-cloak
+         class="flex items-center justify-between px-5 py-4 border-t border-[var(--border)]">
+      <p class="text-[13px] text-[var(--ink-3)]">Page <span x-text="page"></span> of <span x-text="totalPages"></span></p>
+      <div class="flex gap-2">
+        <button @click="prevPage()" :disabled="!hasPrev" :class="!hasPrev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[var(--cream)]'" class="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-[var(--border-2)] transition">← Previous</button>
+        <button @click="nextPage()" :disabled="!hasNext" :class="!hasNext ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[var(--cream)]'" class="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-[var(--border-2)] transition">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Journal Entry -->
+  <div x-show="isModalOpen" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+    <div @click.away="isModalOpen = false" class="bg-[var(--paper)] w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col my-8" style="max-height: 90vh;">
+      
+      <div class="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center sticky top-0 bg-[var(--paper)] z-10">
+        <h2 class="text-xl font-display font-semibold text-[var(--ink)]">New Journal Entry</h2>
+        <button @click="isModalOpen = false" class="p-2 rounded-lg hover:bg-[var(--cream)] transition">
+          <svg class="w-5 h-5 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto flex-1 space-y-6">
+        <!-- Error Message -->
+        <div x-show="modalError" x-cloak class="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm" x-text="modalError"></div>
+
+        <!-- Header Details -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Date</label>
+            <input type="date" x-model="newEntry.entry_date" required class="input w-full">
+          </div>
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Reference</label>
+            <input type="text" x-model="newEntry.reference" placeholder="e.g. JV-001" required class="input w-full">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Description</label>
+            <input type="text" x-model="newEntry.description" placeholder="What is this entry for?" required class="input w-full">
+          </div>
+        </div>
+
+        <!-- Lines -->
+        <div>
+          <div class="flex justify-between items-end mb-2">
+            <h3 class="text-sm font-medium text-[var(--ink)]">Journal Lines</h3>
+            <div class="text-sm font-mono">
+              <span class="text-[var(--ink-3)] mr-2">Totals:</span>
+              <span class="text-red-600 mr-2" x-text="'DR ' + fmtMoney(totalDebit)"></span>
+              <span class="text-emerald-600" x-text="'CR ' + fmtMoney(totalCredit)"></span>
+            </div>
+          </div>
+          
+          <div class="border border-[var(--border)] rounded-lg overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+                <tr>
+                  <th class="text-left px-4 py-2 font-medium text-[var(--ink-3)]">Account</th>
+                  <th class="text-left px-4 py-2 font-medium text-[var(--ink-3)] w-48">Memo (Optional)</th>
+                  <th class="text-right px-4 py-2 font-medium text-[var(--ink-3)] w-32">Debit</th>
+                  <th class="text-right px-4 py-2 font-medium text-[var(--ink-3)] w-32">Credit</th>
+                  <th class="w-10"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[var(--border)]">
+                <template x-for="(line, index) in newEntry.lines" :key="index">
+                  <tr class="hover:bg-[var(--cream)]/30">
+                    <td class="px-4 py-2">
+                      <select x-model="line.account_code" class="input w-full !py-1.5 !px-2 text-sm">
+                        <option value="">Select Account...</option>
+                        <template x-for="acc in glAccounts" :key="acc.id">
+                          <option :value="acc.code" x-text="acc.code + ' - ' + acc.name"></option>
+                        </template>
+                      </select>
+                    </td>
+                    <td class="px-4 py-2">
+                      <input type="text" x-model="line.memo" placeholder="Optional memo" class="input w-full !py-1.5 !px-2 text-sm">
+                    </td>
+                    <td class="px-4 py-2">
+                      <input type="number" step="0.01" min="0" x-model.number="line.debit" @input="if(line.debit > 0) line.credit = ''" placeholder="0.00" class="input w-full !py-1.5 !px-2 text-sm text-right">
+                    </td>
+                    <td class="px-4 py-2">
+                      <input type="number" step="0.01" min="0" x-model.number="line.credit" @input="if(line.credit > 0) line.debit = ''" placeholder="0.00" class="input w-full !py-1.5 !px-2 text-sm text-right">
+                    </td>
+                    <td class="px-2 py-2 text-center">
+                      <button @click="removeLine(index)" class="p-1 text-[var(--ink-3)] hover:text-red-500 transition" :disabled="newEntry.lines.length <= 2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="px-4 py-2 bg-[var(--cream)] border-t border-[var(--border)] text-left">
+              <button @click="addLine()" class="text-sm font-medium text-[var(--accent)] hover:underline">+ Add Line</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)]/50 flex justify-end gap-3 sticky bottom-0">
+        <button @click="isModalOpen = false" class="px-5 py-2 rounded-lg border border-[var(--border-2)] text-[var(--ink-2)] font-medium hover:bg-[var(--paper)] transition">Cancel</button>
+        <button @click="saveEntry()" :disabled="!isBalanced || saving" class="px-5 py-2 rounded-lg bg-[var(--ink)] text-white font-medium hover:opacity-90 disabled:opacity-50 transition flex items-center gap-2">
+          <span x-show="saving" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          <span x-text="saving ? 'Saving...' : 'Save Entry'"></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function journalEntries() {
+  return {
+    loading: true, entries: [], total: 0,
+    page: 1, pageSize: 20, totalPages: 1, hasNext: false, hasPrev: false,
+    search: '', sourceFilter: '', ordering: '-entry_date',
+
+    // Modal state
+    isModalOpen: false,
+    saving: false,
+    modalError: '',
+    glAccounts: [],
+    newEntry: {
+      entry_date: new Date().toISOString().split('T')[0],
+      reference: '',
+      description: '',
+      lines: []
+    },
+
+    async init() { 
+      await Promise.all([this.reload(), this.fetchAccounts()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async reload() { this.page = 1; await this.fetch(); },
+
+    async fetch() {
+      this.loading = true;
+      try {
+        const params = new URLSearchParams();
+        params.set('page', this.page);
+        if (this.search)       params.set('search', this.search);
+        if (this.sourceFilter) params.set('source_type', this.sourceFilter);
+        if (this.ordering)     params.set('ordering', this.ordering);
+
+        const r = await fetch(`/api/accounting/journal-entries/?${params}`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (!r.ok) throw new Error('Failed');
+        const data = await r.json();
+        this.entries = data.results || data;
+        this.total = data.count || this.entries.length;
+        this.totalPages = Math.ceil(this.total / this.pageSize) || 1;
+        this.hasNext = !!data.next;
+        this.hasPrev = !!data.previous;
+      } catch (e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    async fetchAccounts() {
+      try {
+        // CHANGE THIS URL to match your router.register(...) in apps/accounting/urls.py
+        const r = await fetch('/api/accounting/accounts/', { 
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (r.ok) {
+          const data = await r.json();
+          this.glAccounts = data.results || data;
+        }
+      } catch (e) { console.error('Failed to load GL accounts', e); }
+    },
+
+    openModal() {
+      this.newEntry = {
+        entry_date: new Date().toISOString().split('T')[0],
+        reference: '',
+        description: '',
+        lines: [
+                { account_code: '', memo: '', debit: null, credit: null },
+                { account_code: '', memo: '', debit: null, credit: null }
+        ]
+      };
+      this.modalError = '';
+      this.isModalOpen = true;
+    },
+
+    addLine() {
+      this.newEntry.lines.push({ account_code: '', memo: '', debit: null, credit: null });
+    },
+
+    removeLine(index) {
+      if (this.newEntry.lines.length > 2) {
+        this.newEntry.lines.splice(index, 1);
+      }
+    },
+
+    get totalDebit() {
+      return this.newEntry.lines.reduce((sum, line) => sum + (parseFloat(line.debit) || 0), 0);
+    },
+
+    get totalCredit() {
+      return this.newEntry.lines.reduce((sum, line) => sum + (parseFloat(line.credit) || 0), 0);
+    },
+
+    get isBalanced() {
+      return this.totalDebit > 0 && Math.abs(this.totalDebit - this.totalCredit) < 0.01;
+    },
+
+    async saveEntry() {
+      this.modalError = '';
+      if (!this.isBalanced) {
+        this.modalError = 'Debits and Credits must balance to the same amount.';
+        return;
+      }
+
+      // Filter out empty lines
+    const validLines = this.newEntry.lines.filter(l => l.account_id && (l.debit > 0 || l.credit > 0));
+      if (validLines.length < 2) {
+        this.modalError = 'You need at least two valid lines.';
+        return;
+      }
+
+      this.saving = true;
+      try {
+        const payload = {
+          entry_date: this.newEntry.entry_date,
+          reference: this.newEntry.reference,
+          description: this.newEntry.description,
+          lines: validLines.map(l => ({
+            account_id: l.account_id,
+            debit: l.debit || 0,
+            credit: l.credit || 0,
+            memo: l.memo || ''
+          }))
+        };
+
+        const r = await fetch('/api/accounting/journal-entries/manual/', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + this.getToken(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await r.json();
+        if (!r.ok) {
+          throw new Error(data.error || data.detail || 'Failed to create entry.');
+        }
+
+        this.isModalOpen = false;
+        await this.reload(); // Refresh list
+      } catch (e) {
+        this.modalError = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    nextPage() { if (this.hasNext) { this.page++; this.fetch(); } },
+    prevPage() { if (this.hasPrev) { this.page--; this.fetch(); } },
+    goTo(id) { window.location.href = `/app/accounting/journal-entries/${id}/`; },
+
+    fmtMoney(v) {
+      const n = Number(v);
+      if (!isFinite(n)) return '0.00';
+      return n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('journalEntries', journalEntries));
+</script>
+
+{% endblock %}

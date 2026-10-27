@@ -1,0 +1,239 @@
+{% extends "app/base_app.html" %}
+{% block title %}Groups — Nimbus{% endblock %}
+{% block page_title %}Lending Groups{% endblock %}
+
+{% block content %}
+<div x-data="groupsList()" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/dashboard/" class="hover:text-[var(--ink)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Groups</span>
+  </nav>
+
+  <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
+    <div>
+      <h2 class="font-display text-[32px] sm:text-[36px] leading-tight tracking-tight">Lending Groups</h2>
+      <p class="mt-1.5 text-[14px] text-[var(--ink-2)]">Village savings groups, cooperatives, self-help groups.</p>
+    </div>
+    <button @click="openCreate()" class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto inline-flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      New Group
+    </button>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="card p-4">
+      <p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total</p>
+      <p class="font-display text-[26px] mt-1.5" x-text="stats.total || 0"></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active</p>
+      <p class="font-display text-[26px] mt-1.5 text-emerald-700" x-text="stats.active || 0"></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Forming</p>
+      <p class="font-display text-[26px] mt-1.5 text-amber-700" x-text="stats.forming || 0"></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Members</p>
+      <p class="font-display text-[26px] mt-1.5" x-text="stats.members || 0"></p>
+    </div>
+  </div>
+
+  <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
+    <input type="search" x-model.debounce.400ms="search" @input="load()" placeholder="Search by group name or code…" class="input !w-72" />
+    <select x-model="filterStatus" @change="load()" class="input !w-auto">
+      <option value="">All statuses</option>
+      <option value="FORMING">Forming</option>
+      <option value="ACTIVE">Active</option>
+      <option value="SUSPENDED">Suspended</option>
+      <option value="CLOSED">Closed</option>
+    </select>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Group</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Leader</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Members</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Portfolio</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Savings</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Status</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="g in groups" :key="g.id">
+          <tr class="border-t border-[var(--border)] cursor-pointer hover:bg-[var(--cream)] transition"
+              @click="go(g.id)">
+            <td class="px-5 py-3.5">
+              <div class="text-[13.5px] font-medium" x-text="g.group_name"></div>
+              <div class="text-[11px] text-[var(--ink-3)] font-mono" x-text="g.group_code"></div>
+            </td>
+            <td class="px-5 py-3.5 text-[13px]" x-text="g.leader_name || '—'"></td>
+            <td class="px-5 py-3.5 text-right tabular-nums text-[13px]" x-text="g.member_count"></td>
+            <td class="px-5 py-3.5 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(g.portfolio)"></td>
+            <td class="px-5 py-3.5 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(g.savings_balance)"></td>
+            <td class="px-5 py-3.5">
+              <span class="pill" :class="statusPill(g.status)" x-text="prettyStatus(g.status)"></span>
+            </td>
+            <td class="px-5 py-3.5 text-[var(--ink-4)]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="!loading && groups.length === 0">
+          <td colspan="7" class="p-16 text-center text-[13.5px] text-[var(--ink-3)]">No groups yet. Click <strong>New Group</strong> to create one.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Create modal -->
+  <div x-show="showCreate" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showCreate = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showCreate = false">
+      <h3 class="font-display text-[24px] mb-5">Create group</h3>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Group name *</label>
+          <input x-model="form.group_name" class="input" placeholder="e.g. Chilenje Women's Group" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Branch *</label>
+          <select x-model="form.branch" class="input">
+            <option value="">Select branch…</option>
+            <template x-for="b in branches" :key="b.id">
+              <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Group leader *</label>
+          <select x-model="form.leader" class="input">
+            <option value="">Select leader…</option>
+            <template x-for="c in clients" :key="c.id">
+              <option :value="c.id" x-text="c.first_name + ' ' + c.last_name + ' — ' + c.nrc"></option>
+            </template>
+          </select>
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">Leader is auto-added as a member.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Meeting frequency</label>
+            <select x-model="form.meeting_frequency" class="input">
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Bi-Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Meeting day</label>
+            <input x-model="form.meeting_day" class="input" placeholder="e.g. Tuesday" />
+          </div>
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Meeting location</label>
+          <input x-model="form.meeting_location" class="input" placeholder="e.g. Community hall" />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Min members</label>
+            <input type="number" x-model.number="form.min_members" class="input" />
+          </div>
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Max members</label>
+            <input type="number" x-model.number="form.max_members" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div x-show="modalError" x-cloak class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800" x-text="modalError"></div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showCreate = false" class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)]">Cancel</button>
+        <button @click="create()" :disabled="saving" class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px] disabled:opacity-50">
+          <span x-text="saving ? 'Creating…' : 'Create group'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function groupsList() {
+  return {
+    groups: [],
+    stats: { total: 0, active: 0, forming: 0, members: 0 },
+    branches: [], clients: [],
+    search: '', filterStatus: '',
+    loading: true, error: '',
+    showCreate: false, saving: false, modalError: '',
+    form: {
+      group_name: '', branch: '', leader: '',
+      meeting_frequency: 'WEEKLY', meeting_day: '', meeting_location: '',
+      min_members: 5, max_members: 30,
+    },
+
+    async init() {
+      await Promise.all([this.load(), this.loadRefs()]);
+      this.loading = false;
+    },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async api(url, opts = {}) {
+      const r = await fetch(url, { ...opts, headers: { 'Authorization': 'Bearer ' + this.getToken(), 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || e.detail || ('HTTP ' + r.status)); }
+      return r.json();
+    },
+    async load() {
+      this.loading = true;
+      try {
+        const p = new URLSearchParams({ page_size: '200' });
+        if (this.search) p.set('search', this.search);
+        if (this.filterStatus) p.set('status', this.filterStatus);
+        const d = await this.api('/api/loans/groups/?' + p);
+        this.groups = d.results || d;
+        this.stats.total = this.groups.length;
+        this.stats.active = this.groups.filter(g => g.status === 'ACTIVE').length;
+        this.stats.forming = this.groups.filter(g => g.status === 'FORMING').length;
+        this.stats.members = this.groups.reduce((s, g) => s + (g.member_count || 0), 0);
+      } catch (e) { this.error = e.message; }
+      finally { this.loading = false; }
+    },
+    async loadRefs() {
+      try { const d = await this.api('/api/auth/branches/?page_size=200'); this.branches = d.results || d; } catch (e) {}
+      try { const d = await this.api('/api/clients/?page_size=500&is_active=true&kyc_status=VERIFIED'); this.clients = d.results || d; } catch (e) {}
+    },
+    openCreate() {
+      this.form = { group_name: '', branch: '', leader: '', meeting_frequency: 'WEEKLY', meeting_day: '', meeting_location: '', min_members: 5, max_members: 30 };
+      this.modalError = ''; this.showCreate = true;
+    },
+    async create() {
+      if (!this.form.group_name || !this.form.branch || !this.form.leader) {
+        this.modalError = 'Name, branch, and leader are required.'; return;
+      }
+      this.saving = true; this.modalError = '';
+      try {
+        const g = await this.api('/api/loans/groups/', { method: 'POST', body: JSON.stringify(this.form) });
+        this.showCreate = false;
+        window.location.href = '/app/groups/' + g.id + '/';
+      } catch (e) { this.modalError = e.message; }
+      finally { this.saving = false; }
+    },
+    go(id) { window.location.href = '/app/groups/' + id + '/'; },
+    fmtMoney(v) { const n = Number(v || 0); return 'K ' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+    prettyStatus(s) { return { FORMING: 'Forming', ACTIVE: 'Active', SUSPENDED: 'Suspended', CLOSED: 'Closed' }[s] || s; },
+    statusPill(s) { return { FORMING: 'pill-warning', ACTIVE: 'pill-success', SUSPENDED: 'pill-danger', CLOSED: 'pill-neutral' }[s] || 'pill-neutral'; },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('groupsList', groupsList));
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "app/base_app.html" %}
+{% block title %}Notification Settings — Nimbus{% endblock %}
+{% block page_title %}Notification Settings{% endblock %}
+
+{% block content %}
+<div x-data="notifSettings()" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/notifications/" class="hover:text-[var(--ink)] transition">Notifications</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Settings</span>
+  </nav>
+
+  <h2 class="font-display text-[32px] tracking-tight mb-2">Notification Settings</h2>
+  <p class="text-[14px] text-[var(--ink-2)] mb-6">Configure SMS, WhatsApp, and Email provider credentials.</p>
+
+  <div x-show="saved" x-cloak class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-800">Settings saved.</div>
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <div class="space-y-6">
+    <!-- SMS -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] mb-4">SMS — Africa's Talking</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Username</label>
+          <input x-model="config.sms_username" class="input" placeholder="e.g. nimbus_mfi" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">API Key</label>
+          <input type="password" x-model="config.sms_api_key" class="input" placeholder="atsk_..." />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Sender ID (optional)</label>
+          <input x-model="config.sms_sender_id" class="input" placeholder="NIMBUS" maxlength="11" />
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] mb-4">WhatsApp — Twilio</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Account SID</label>
+          <input x-model="config.twilio_account_sid" class="input" placeholder="ACxxxxxxx" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Auth Token</label>
+          <input type="password" x-model="config.twilio_auth_token" class="input" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">From (WhatsApp number)</label>
+          <input x-model="config.whatsapp_from" class="input" placeholder="whatsapp:+14155238886" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Email -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] mb-4">Email — SMTP</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">SMTP Host</label>
+          <input x-model="config.email_host" class="input" placeholder="smtp.gmail.com" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Port</label>
+          <input type="number" x-model.number="config.email_port" class="input" placeholder="587" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Username</label>
+          <input x-model="config.email_username" class="input" placeholder="you@acme-mfi.zm" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Password / App Password</label>
+          <input type="password" x-model="config.email_password" class="input" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">From Name</label>
+          <input x-model="config.email_from_name" class="input" placeholder="Nimbus MFI" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">From Address</label>
+          <input x-model="config.email_from_address" class="input" placeholder="noreply@acme-mfi.zm" />
+        </div>
+        <div class="md:col-span-2 flex items-center gap-2">
+          <input type="checkbox" x-model="config.email_use_tls" class="w-4 h-4" />
+          <span class="text-[13px]">Use STARTTLS (recommended for port 587)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- General -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] mb-4">General</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Default Country Code</label>
+          <input x-model="config.default_country_code" class="input" placeholder="260" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Test destination (sandbox)</label>
+          <input x-model="config.test_number" class="input" placeholder="+260971234567 or you@test.zm" />
+        </div>
+        <div class="flex items-end gap-4 flex-wrap">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" x-model="config.is_active" class="w-4 h-4" />
+            <span class="text-[13px]">Active</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" x-model="config.is_sandbox" class="w-4 h-4" />
+            <span class="text-[13px]">Sandbox mode</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex justify-end gap-3 mt-6">
+    <button @click="save()" :disabled="saving" class="btn-primary !w-auto !py-2.5 !px-6 !text-[13.5px] disabled:opacity-50">
+      <span x-text="saving ? 'Saving…' : 'Save settings'"></span>
+    </button>
+  </div>
+</div>
+
+<script>
+function notifSettings() {
+  return {
+    config: {
+      sms_provider: 'AFRICAS_TALKING', sms_username: '', sms_api_key: '', sms_sender_id: '',
+      whatsapp_provider: 'TWILIO', twilio_account_sid: '', twilio_auth_token: '', whatsapp_from: '',
+      email_provider: 'SMTP', email_host: '', email_port: 587,
+      email_username: '', email_password: '', email_use_tls: true,
+      email_from_name: '', email_from_address: '',
+      default_country_code: '260', test_number: '',
+      is_active: true, is_sandbox: true,
+    },
+    saved: false, saving: false, error: '',
+    async init() {
+      try {
+        const r = await fetch('/api/notifications/config/current/', { headers: { 'Authorization': 'Bearer ' + this.getToken() } });
+        if (r.ok) this.config = { ...this.config, ...(await r.json()) };
+      } catch (e) {}
+    },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async save() {
+      this.saving = true; this.error = ''; this.saved = false;
+      try {
+        const r = await fetch('/api/notifications/config/current/', {
+          method: 'PUT',
+          headers: { 'Authorization': 'Bearer ' + this.getToken(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.config),
+        });
+        if (!r.ok) throw new Error('Save failed.');
+        this.config = await r.json();
+        this.saved = true; setTimeout(() => this.saved = false, 4000);
+      } catch (e) { this.error = e.message; }
+      finally { this.saving = false; }
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('notifSettings', notifSettings));
+</script>
+{% endblock %}

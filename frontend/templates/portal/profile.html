@@ -1,0 +1,80 @@
+{% extends "portal/base_portal.html" %}
+{% block title %}Account{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="font-display text-[28px] sm:text-[32px] leading-tight">My Account</h1>
+</div>
+
+<!-- Client info (read-only) -->
+<div class="card p-6 mb-6">
+  <h2 class="font-display text-[18px] mb-4">Personal information</h2>
+  <dl class="space-y-3 text-[13.5px]">
+    <div class="flex justify-between gap-4">
+      <dt class="text-[var(--ink-3)]">Name</dt>
+      <dd class="text-right font-medium">{{ client.first_name }} {{ client.last_name }}</dd>
+    </div>
+    <div class="flex justify-between gap-4">
+      <dt class="text-[var(--ink-3)]">NRC</dt>
+      <dd class="text-right font-mono text-[12.5px]">{{ client.nrc }}</dd>
+    </div>
+    <div class="flex justify-between gap-4">
+      <dt class="text-[var(--ink-3)]">Phone</dt>
+      <dd class="text-right font-mono text-[12.5px]">{{ client.phone }}</dd>
+    </div>
+    {% if client.email %}
+      <div class="flex justify-between gap-4">
+        <dt class="text-[var(--ink-3)]">Email</dt>
+        <dd class="text-right">{{ client.email }}</dd>
+      </div>
+    {% endif %}
+    <div class="flex justify-between gap-4">
+      <dt class="text-[var(--ink-3)]">KYC Status</dt>
+      <dd class="text-right">
+        {% if client.kyc_status == 'VERIFIED' %}
+          <span class="pill pill-success">Verified</span>
+        {% elif client.kyc_status == 'PENDING' %}
+          <span class="pill pill-warning">Pending</span>
+        {% else %}
+          <span class="pill pill-danger">Rejected</span>
+        {% endif %}
+      </dd>
+    </div>
+  </dl>
+  <p class="text-[12px] text-[var(--ink-3)] mt-5 italic">
+    To update your personal information, please visit your nearest branch.
+  </p>
+</div>
+
+<!-- Password change -->
+<div class="card p-6">
+  <h2 class="font-display text-[18px] mb-4">Change password</h2>
+
+  {% if success %}
+    <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3 text-[13.5px]">{{ success }}</div>
+  {% endif %}
+  {% if error %}
+    <div class="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-[13.5px]">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" novalidate class="space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Current password</label>
+      <input type="password" name="old_password" required class="input" />
+    </div>
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">New password</label>
+      <input type="password" name="new_password" required minlength="6" class="input" />
+      <p class="text-[11.5px] text-[var(--ink-3)] mt-1.5">At least 6 characters.</p>
+    </div>
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Confirm new password</label>
+      <input type="password" name="new_password2" required class="input" />
+    </div>
+
+    <button type="submit" class="btn-primary">Change password</button>
+  </form>
+</div>
+{% endblock %}

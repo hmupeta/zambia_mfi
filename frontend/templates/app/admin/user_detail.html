@@ -1,0 +1,429 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}User Detail — Nimbus{% endblock %}
+{% block page_title %}User Detail{% endblock %}
+
+{% block content %}
+<div x-data="userDetailPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" with x_binding="user?.full_name || user?.username || 'User'" %}
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="loading" class="text-center py-16 text-[13px] text-[var(--ink-3)]">Loading…</div>
+
+  <template x-if="user">
+    <div class="space-y-6">
+
+      <!-- ═══════════════════════════════════════════════ -->
+      <!-- Header card                                    -->
+      <!-- ═══════════════════════════════════════════════ -->
+      <div class="card p-6 lg:p-8">
+        <div class="flex items-start gap-5 flex-wrap">
+          <div class="w-16 h-16 rounded-full flex items-center justify-center text-white font-semibold text-[22px] flex-shrink-0"
+               style="background: var(--accent);"
+               x-text="initial"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <h2 class="font-display text-[28px] tracking-tight"
+                  x-text="user.full_name || user.username"></h2>
+              <span class="pill" :class="user.is_active ? 'pill-success' : 'pill-neutral'"
+                    x-text="user.is_active ? 'Active' : 'Inactive'"></span>
+              <span x-show="user.is_superuser"
+                    class="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-mono font-semibold uppercase tracking-wider">
+                Superuser
+              </span>
+              <span x-show="user.is_platform_admin"
+                    class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono font-semibold uppercase tracking-wider">
+                Platform admin
+              </span>
+            </div>
+            <p class="mt-2 font-mono text-[13px] text-[var(--ink-3)]"
+               x-text="'@' + user.username"></p>
+            <div class="mt-2 flex gap-4 text-[12.5px] text-[var(--ink-2)] font-mono flex-wrap">
+              <span x-show="user.email">✉ <span x-text="user.email"></span></span>
+              <span x-show="user.phone">📞 <span x-text="user.phone"></span></span>
+            </div>
+            <div class="mt-2 flex gap-4 text-[12px] text-[var(--ink-3)] flex-wrap">
+              <span x-show="user.role">Role: <span class="font-medium" x-text="user.role_display || user.role"></span></span>
+              <span x-show="user.branch_code">Branch: <span class="font-mono" x-text="user.branch_code"></span></span>
+            </div>
+          </div>
+          <div class="flex gap-2 flex-shrink-0">
+            <a :href="'/app/users/?edit=' + user.id"
+               class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+              Edit User
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════ -->
+      <!-- KPI cards                                      -->
+      <!-- ═══════════════════════════════════════════════ -->
+      <template x-if="stats">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Loans Handled</p>
+            <p class="text-[22px] font-display mt-1" x-text="stats.kpis.loans_handled"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5 font-mono"
+               x-text="'K ' + formatNumber(stats.kpis.loans_value)"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Expenses</p>
+            <p class="text-[22px] font-display mt-1" x-text="stats.kpis.expenses_count"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5 font-mono"
+               x-text="'K ' + formatNumber(stats.kpis.expenses_value)"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Journal Entries</p>
+            <p class="text-[22px] font-display mt-1" x-text="stats.kpis.journal_entries"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5">created by this user</p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Last Login</p>
+            <p class="text-[16px] font-mono mt-1"
+               x-text="user.last_login ? fmtDate(user.last_login) : 'Never'"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5 font-mono"
+               x-text="user.last_login ? fmtTime(user.last_login) : ''"></p>
+          </div>
+        </div>
+      </template>
+
+      <!-- ═══════════════════════════════════════════════ -->
+      <!-- Two-column: Details + Recent activity          -->
+      <!-- ═══════════════════════════════════════════════ -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Account details -->
+        <div class="card p-6">
+          <h3 class="font-display text-[18px] tracking-tight mb-4">Account Details</h3>
+          <dl class="space-y-3 text-[13.5px]">
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Username</dt>
+              <dd class="font-mono" x-text="user.username"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Full Name</dt>
+              <dd class="font-medium" x-text="user.full_name || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Email</dt>
+              <dd class="font-mono text-[12.5px]" x-text="user.email || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Phone</dt>
+              <dd class="font-mono text-[12.5px]" x-text="user.phone || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Role</dt>
+              <dd>
+                <span class="pill pill-info" x-text="user.role_display || user.role || '—'"></span>
+              </dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Organization</dt>
+              <dd class="font-mono text-[12.5px]" x-text="user.organization_code || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Branch</dt>
+              <dd class="font-mono text-[12.5px]"
+                  x-text="user.branch_code ? (user.branch_code + ' — ' + (user.branch_name || '')) : '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5 border-b border-[var(--border)]">
+              <dt class="text-[var(--ink-3)]">Date Joined</dt>
+              <dd class="font-mono text-[12.5px]" x-text="fmtDate(user.date_joined)"></dd>
+            </div>
+            <div class="flex justify-between gap-3 py-1.5">
+              <dt class="text-[var(--ink-3)]">Staff Access</dt>
+              <dd>
+                <span class="pill" :class="user.is_staff ? 'pill-success' : 'pill-neutral'"
+                      x-text="user.is_staff ? 'Yes' : 'No'"></span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- Recent journal entries -->
+        <template x-if="stats">
+          <div class="card p-0 overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+              <h3 class="font-display text-[18px] tracking-tight">Recent Journal Entries</h3>
+              <a href="/app/accounting/journal-entries/"
+                 class="text-[12px] text-[var(--accent)] hover:underline">View all →</a>
+            </div>
+            <div x-show="stats.recent_journal_entries.length === 0"
+                 class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+              No journal entries created by this user.
+            </div>
+            <div class="divide-y divide-[var(--border)]"
+                 x-show="stats.recent_journal_entries.length > 0">
+              <template x-for="je in stats.recent_journal_entries" :key="je.id">
+                <div class="px-5 py-3">
+                  <div class="flex items-start gap-3">
+                    <span class="font-mono text-[11.5px] text-[var(--ink-3)] w-[88px] flex-shrink-0 mt-0.5"
+                          x-text="fmtDate(je.entry_date)"></span>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[13px] font-medium font-mono truncate" x-text="je.reference"></p>
+                      <p class="text-[12px] text-[var(--ink-2)] truncate mt-0.5"
+                         x-text="je.description || '—'"></p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="pill pill-neutral text-[10px]" x-text="je.source_type"></span>
+                      <span x-show="je.is_reversed"
+                            class="pill pill-danger text-[10px]">Reversed</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════ -->
+      <!-- Security / Actions panel                       -->
+      <!-- ═══════════════════════════════════════════════ -->
+      <div class="card p-6">
+        <h3 class="font-display text-[18px] tracking-tight mb-4">Security & Actions</h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+          <!-- Reset password -->
+          <div class="p-4 rounded-xl border border-[var(--border)]">
+            <p class="text-[13.5px] font-medium mb-1">Reset Password</p>
+            <p class="text-[12px] text-[var(--ink-3)] mb-3">
+              Set a new password for this user. They will be signed out immediately.
+            </p>
+            <button @click="openPasswordModal()"
+                    class="text-[12.5px] text-[var(--accent)] hover:underline font-medium">
+              Set new password →
+            </button>
+          </div>
+
+          <!-- Activate / deactivate -->
+          <div class="p-4 rounded-xl border border-[var(--border)]">
+            <p class="text-[13.5px] font-medium mb-1"
+               x-text="user.is_active ? 'Deactivate Account' : 'Activate Account'"></p>
+            <p class="text-[12px] text-[var(--ink-3)] mb-3"
+               x-text="user.is_active
+                       ? 'User will no longer be able to sign in, but all their historical records are preserved.'
+                       : 'User will regain sign-in access immediately.'"></p>
+            <button @click="toggleActive()"
+                    class="text-[12.5px] hover:underline font-medium"
+                    :class="user.is_active ? 'text-red-600' : 'text-emerald-600'"
+                    x-text="user.is_active ? 'Deactivate →' : 'Activate →'"></button>
+          </div>
+
+          <!-- View branch -->
+          <div class="p-4 rounded-xl border border-[var(--border)]" x-show="user.branch">
+            <p class="text-[13.5px] font-medium mb-1">Branch</p>
+            <p class="text-[12px] text-[var(--ink-3)] mb-3"
+               x-text="user.branch_name || user.branch_code || 'Assigned branch'"></p>
+            <a :href="'/app/branches/' + user.branch + '/'"
+               class="text-[12.5px] text-[var(--accent)] hover:underline font-medium">
+              View branch →
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- Password reset modal                           -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <div x-show="passwordModal" x-cloak
+       @keydown.escape.window="passwordModal = false"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="passwordModal = false"
+         class="bg-white rounded-2xl p-6 max-w-md w-full">
+      <h3 class="font-display text-[20px] tracking-tight mb-2">Reset Password</h3>
+      <p class="text-[13px] text-[var(--ink-3)] mb-5">
+        Set a new password for <strong x-text="user?.username"></strong>. Minimum 8 characters.
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="label">New Password <span class="text-red-500">*</span></label>
+          <input type="password" x-model="passwordForm.new_password"
+                 minlength="8" class="input" autocomplete="new-password" />
+        </div>
+        <div>
+          <label class="label">Confirm Password <span class="text-red-500">*</span></label>
+          <input type="password" x-model="passwordForm.confirm_password"
+                 minlength="8" class="input" autocomplete="new-password" />
+        </div>
+      </div>
+
+      <div x-show="passwordError" x-cloak
+           class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+           x-text="passwordError"></div>
+
+      <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border)]">
+        <button @click="passwordModal = false"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+          Cancel
+        </button>
+        <button @click="savePassword()" :disabled="passwordBusy"
+                class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+          <span x-text="passwordBusy ? 'Saving…' : 'Set Password'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function userDetailPage() {
+  const API = '/api/auth';
+  const USER_ID = '{{ user_id }}';
+
+  return {
+    user: null,
+    stats: null,
+    loading: false,
+    error: '',
+
+    passwordModal: false,
+    passwordBusy: false,
+    passwordError: '',
+    passwordForm: { new_password: '', confirm_password: '' },
+
+    toastMsg: '',
+
+    get initial() {
+      if (!this.user) return '?';
+      const n = this.user.full_name || this.user.username || '?';
+      return n[0].toUpperCase();
+    },
+
+    async init() {
+      await this.load();
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+    authHeaders(extra = {}) {
+      return { 'Authorization': 'Bearer ' + this.getToken(), ...extra };
+    },
+
+    async load() {
+      this.loading = true;
+      this.error = '';
+      try {
+        const [uRes, sRes] = await Promise.all([
+          fetch(`${API}/users/${USER_ID}/`, { headers: this.authHeaders() }),
+          fetch(`${API}/users/${USER_ID}/stats/`, { headers: this.authHeaders() }),
+        ]);
+
+        if (!uRes.ok) throw new Error('User not found.');
+        this.user = await uRes.json();
+
+        if (sRes.ok) {
+          this.stats = await sRes.json();
+        } else {
+          console.warn('stats endpoint failed:', sRes.status);
+          this.stats = {
+            kpis: { loans_handled: 0, loans_value: 0, expenses_count: 0,
+                    expenses_value: 0, journal_entries: 0 },
+            recent_journal_entries: [],
+          };
+        }
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    openPasswordModal() {
+      this.passwordForm = { new_password: '', confirm_password: '' };
+      this.passwordError = '';
+      this.passwordModal = true;
+    },
+
+    async savePassword() {
+      this.passwordError = '';
+
+      if (!this.passwordForm.new_password || this.passwordForm.new_password.length < 8) {
+        this.passwordError = 'Password must be at least 8 characters.';
+        return;
+      }
+      if (this.passwordForm.new_password !== this.passwordForm.confirm_password) {
+        this.passwordError = 'Passwords do not match.';
+        return;
+      }
+
+      this.passwordBusy = true;
+      try {
+        const r = await fetch(`${API}/users/${USER_ID}/set_password/`, {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ new_password: this.passwordForm.new_password }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.new_password?.[0] || 'Password reset failed.');
+        }
+        this.passwordModal = false;
+        this.toast('Password reset successfully.');
+      } catch (e) {
+        this.passwordError = e.message;
+      } finally {
+        this.passwordBusy = false;
+      }
+    },
+
+    async toggleActive() {
+      const verb = this.user.is_active ? 'deactivate' : 'activate';
+      if (!confirm(`Are you sure you want to ${verb} "${this.user.username}"?`)) return;
+      try {
+        const r = await fetch(`${API}/users/${USER_ID}/toggle_active/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'Action failed');
+        }
+        this.toast(`User ${verb}d.`);
+        await this.load();
+      } catch (e) {
+        this.toast(e.message, 'error');
+      }
+    },
+
+    toast(msg, type = 'success') {
+      this.toastMsg = msg;
+      setTimeout(() => this.toastMsg = '', 3000);
+    },
+
+    formatNumber(v) {
+      const n = parseFloat(v) || 0;
+      return n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+
+    fmtTime(iso) {
+      if (!iso) return '';
+      try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+      catch { return ''; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('userDetailPage', userDetailPage);
+});
+</script>
+{% endblock %}

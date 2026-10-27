@@ -1,0 +1,379 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Financial Statements — Nimbus{% endblock %}
+{% block page_title %}Financial Statements{% endblock %}
+
+{% block content %}
+<div x-data="statements()" x-init="init()">
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <!-- Alerts -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <!-- Tabs -->
+  <div class="border-b border-[var(--border)] mb-6">
+    <div class="flex gap-1 overflow-x-auto">
+      <button @click="activeTab = 'trial'"
+              :class="activeTab === 'trial' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+              class="px-4 py-3 text-[13.5px] font-medium transition whitespace-nowrap">Trial Balance</button>
+      <button @click="activeTab = 'pnl'"
+              :class="activeTab === 'pnl' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+              class="px-4 py-3 text-[13.5px] font-medium transition whitespace-nowrap">Income Statement</button>
+      <button @click="activeTab = 'bs'"
+              :class="activeTab === 'bs' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+              class="px-4 py-3 text-[13.5px] font-medium transition whitespace-nowrap">Balance Sheet</button>
+    </div>
+  </div>
+
+  <!-- ══════ Trial Balance ══════ -->
+  <div x-show="activeTab === 'trial'" x-cloak>
+    <div class="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+      <label class="text-[13px] text-[var(--ink-2)]">As of</label>
+      <input type="date" x-model="trialAsOf" @change="loadTrial()" class="input !w-auto" />
+      <span x-show="trialBalanced" class="pill pill-success">✓ Debits = Credits</span>
+      <span x-show="!trialBalanced && trialRows.length > 0" class="pill pill-danger">✗ Imbalanced</span>
+
+      <div class="flex-1"></div>
+
+      <button @click="download('/api/accounting/exports/trial-balance/', {as_of: trialAsOf, format: 'pdf'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        PDF
+      </button>
+      <button @click="download('/api/accounting/exports/trial-balance/', {as_of: trialAsOf, format: 'excel'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-3m3 3V7M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+
+    <div class="card overflow-hidden">
+      <table class="w-full">
+        <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+          <tr>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Code</th>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Account</th>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Type</th>
+            <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Debit</th>
+            <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Credit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in trialRows" :key="row.account__code">
+            <tr class="border-t border-[var(--border)]">
+              <td class="px-5 py-3 font-mono text-[13px]" x-text="row.account__code"></td>
+              <td class="px-5 py-3 text-[13.5px]" x-text="row.account__name"></td>
+              <td class="px-5 py-3 text-[12px] text-[var(--ink-3)]" x-text="row.account__account_type"></td>
+              <td class="px-5 py-3 text-right tabular-nums text-[13.5px] font-mono"
+                  x-text="row.total_debit > 0 ? fmtMoney(row.total_debit) : '—'"></td>
+              <td class="px-5 py-3 text-right tabular-nums text-[13.5px] font-mono"
+                  x-text="row.total_credit > 0 ? fmtMoney(row.total_credit) : '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+        <tfoot class="bg-[var(--cream)] border-t-2 border-[var(--ink)]">
+          <tr>
+            <td colspan="3" class="px-5 py-3 text-[13px] font-bold">TOTAL</td>
+            <td class="px-5 py-3 text-right tabular-nums text-[14px] font-bold font-mono"
+                x-text="fmtMoney(trialTotalDebit())"></td>
+            <td class="px-5 py-3 text-right tabular-nums text-[14px] font-bold font-mono"
+                x-text="fmtMoney(trialTotalCredit())"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════ Income Statement ══════ -->
+  <div x-show="activeTab === 'pnl'" x-cloak>
+    <div class="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+      <label class="text-[13px] text-[var(--ink-2)]">From</label>
+      <input type="date" x-model="pnlFrom" @change="loadPnL()" class="input !w-auto" />
+      <label class="text-[13px] text-[var(--ink-2)]">To</label>
+      <input type="date" x-model="pnlTo" @change="loadPnL()" class="input !w-auto" />
+
+      <div class="flex-1"></div>
+
+      <button @click="download('/api/accounting/exports/income-statement/', {from: pnlFrom, to: pnlTo, format: 'pdf'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        PDF
+      </button>
+      <button @click="download('/api/accounting/exports/income-statement/', {from: pnlFrom, to: pnlTo, format: 'excel'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-3m3 3V7M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+
+    <div class="card p-6 mb-4">
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Revenue</p>
+          <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums text-emerald-600"
+             x-text="fmtMoney(pnl.revenue)"></p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Expenses</p>
+          <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums text-red-600"
+             x-text="fmtMoney(pnl.expenses)"></p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Net income</p>
+          <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums"
+             :class="pnl.net_income >= 0 ? 'text-emerald-600' : 'text-red-600'"
+             x-text="fmtMoney(pnl.net_income)"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <table class="w-full">
+        <thead class="bg-[var(--cream)]">
+          <tr>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Code</th>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Account</th>
+            <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Type</th>
+            <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in pnl.accounts || []" :key="row.code">
+            <tr class="border-t border-[var(--border)]">
+              <td class="px-5 py-3 font-mono text-[13px]" x-text="row.code"></td>
+              <td class="px-5 py-3 text-[13.5px]" x-text="row.name"></td>
+              <td class="px-5 py-3">
+                <span class="pill" :class="row.type === 'INCOME' ? 'pill-success' : 'pill-danger'"
+                      x-text="row.type"></span>
+              </td>
+              <td class="px-5 py-3 text-right tabular-nums text-[13.5px] font-mono"
+                  :class="row.type === 'INCOME' ? 'text-emerald-700' : 'text-red-700'"
+                  x-text="fmtMoney(row.amount)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════ Balance Sheet ══════ -->
+  <div x-show="activeTab === 'bs'" x-cloak>
+    <div class="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+      <label class="text-[13px] text-[var(--ink-2)]">As of</label>
+      <input type="date" x-model="bsAsOf" @change="loadBs()" class="input !w-auto" />
+      <span x-show="bs.balanced" class="pill pill-success">✓ Assets = Liabilities + Equity</span>
+      <span x-show="!bs.balanced && bs.total_assets !== undefined" class="pill pill-danger">✗ Out of balance</span>
+
+      <div class="flex-1"></div>
+
+      <button @click="download('/api/accounting/exports/balance-sheet/', {as_of: bsAsOf, format: 'pdf'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        PDF
+      </button>
+      <button @click="download('/api/accounting/exports/balance-sheet/', {as_of: bsAsOf, format: 'excel'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-3m3 3V7M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card overflow-hidden">
+        <div class="px-6 py-4 bg-[var(--cream)] border-b border-[var(--border)] flex items-center justify-between">
+          <h3 class="font-display text-[20px] tracking-tight">Assets</h3>
+          <p class="font-display text-[18px] tabular-nums font-mono" x-text="fmtMoney(bs.total_assets)"></p>
+        </div>
+        <table class="w-full">
+          <tbody>
+            <template x-for="a in bs.assets || []" :key="a.code">
+              <tr class="border-t border-[var(--border)]">
+                <td class="px-6 py-3 font-mono text-[12px] text-[var(--ink-3)]" x-text="a.code"></td>
+                <td class="px-6 py-3 text-[13.5px]" x-text="a.name"></td>
+                <td class="px-6 py-3 text-right tabular-nums text-[13.5px] font-mono" x-text="fmtMoney(a.amount)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="space-y-6">
+        <div class="card overflow-hidden">
+          <div class="px-6 py-4 bg-[var(--cream)] border-b border-[var(--border)] flex items-center justify-between">
+            <h3 class="font-display text-[20px] tracking-tight">Liabilities</h3>
+            <p class="font-display text-[18px] tabular-nums font-mono" x-text="fmtMoney(bs.total_liabilities)"></p>
+          </div>
+          <table class="w-full">
+            <tbody>
+              <template x-for="l in bs.liabilities || []" :key="l.code">
+                <tr class="border-t border-[var(--border)]">
+                  <td class="px-6 py-3 font-mono text-[12px] text-[var(--ink-3)]" x-text="l.code"></td>
+                  <td class="px-6 py-3 text-[13.5px]" x-text="l.name"></td>
+                  <td class="px-6 py-3 text-right tabular-nums text-[13.5px] font-mono" x-text="fmtMoney(l.amount)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="px-6 py-4 bg-[var(--cream)] border-b border-[var(--border)] flex items-center justify-between">
+            <h3 class="font-display text-[20px] tracking-tight">Equity</h3>
+            <p class="font-display text-[18px] tabular-nums font-mono" x-text="fmtMoney(bs.total_equity)"></p>
+          </div>
+          <table class="w-full">
+            <tbody>
+              <template x-for="e in bs.equity || []" :key="e.code">
+                <tr class="border-t border-[var(--border)]">
+                  <td class="px-6 py-3 font-mono text-[12px] text-[var(--ink-3)]" x-text="e.code"></td>
+                  <td class="px-6 py-3 text-[13.5px]" x-text="e.name"></td>
+                  <td class="px-6 py-3 text-right tabular-nums text-[13.5px] font-mono" x-text="fmtMoney(e.amount)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function statements() {
+  return {
+    activeTab: 'trial',
+    trialAsOf: new Date().toISOString().slice(0,10),
+    pnlFrom: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10),
+    pnlTo: new Date().toISOString().slice(0,10),
+    bsAsOf: new Date().toISOString().slice(0,10),
+
+    trialRows: [], trialBalanced: false,
+    pnl: {},
+    bs: {},
+
+    downloading: false,
+    message: '',
+    messageType: 'success',
+
+    async init() {
+      await Promise.all([this.loadTrial(), this.loadPnL(), this.loadBs()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async _fetch(url) {
+      const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.getToken() } });
+      if (!r.ok) throw new Error('Failed');
+      return r.json();
+    },
+
+    async loadTrial() {
+      try {
+        const data = await this._fetch(`/api/accounting/reports/trial-balance/?as_of=${this.trialAsOf}`);
+        this.trialRows = data.rows || [];
+        const d = this.trialTotalDebit();
+        const c = this.trialTotalCredit();
+        this.trialBalanced = Math.abs(d - c) < 0.01;
+      } catch (e) { console.error(e); }
+    },
+
+    async loadPnL() {
+      try {
+        this.pnl = await this._fetch(`/api/accounting/reports/income-statement/?from=${this.pnlFrom}&to=${this.pnlTo}`);
+      } catch (e) { console.error(e); }
+    },
+
+    async loadBs() {
+      try {
+        this.bs = await this._fetch(`/api/accounting/reports/balance-sheet/?as_of=${this.bsAsOf}`);
+      } catch (e) { console.error(e); }
+    },
+
+    async download(endpoint, params) {
+      this.downloading = true;
+      this.message = '';
+      try {
+        const url = `${endpoint}?${new URLSearchParams(params).toString()}`;
+        const r = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || `Download failed (HTTP ${r.status})`);
+        }
+
+        const blob = await r.blob();
+        const disposition = r.headers.get('content-disposition') || '';
+        let filename = 'report';
+        const m = disposition.match(/filename="?([^";]+)"?/);
+        if (m) filename = m[1];
+
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+        this.flash(`Downloaded ${filename}`);
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.downloading = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    trialTotalDebit()  { return this.trialRows.reduce((s, r) => s + Number(r.total_debit || 0), 0); },
+    trialTotalCredit() { return this.trialRows.reduce((s, r) => s + Number(r.total_credit || 0), 0); },
+
+    // Full-precision money — no abbreviations
+    fmtMoney(v) {
+      if (v == null || v === '') return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('statements', statements));
+</script>
+
+{% endblock %}

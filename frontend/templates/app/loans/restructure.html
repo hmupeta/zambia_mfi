@@ -1,0 +1,142 @@
+{% extends "app/base_app.html" %}
+{% block title %}Restructure Loan — Nimbus{% endblock %}
+{% block page_title %}Restructure Loan{% endblock %}
+
+{% block content %}
+<div x-data="restructureWizard('{{ loan_id }}')" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/loans/" class="hover:text-[var(--ink)] transition">Loans</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Restructure</span>
+  </nav>
+
+  <div class="mb-6">
+    <h2 class="font-display text-[32px] leading-tight tracking-tight">Restructure Loan</h2>
+    <p class="mt-1 text-[14px] text-[var(--ink-2)]" x-show="loan" x-text="'Proposing new terms for ' + (loan?.loan_number || '')"></p>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <div class="card p-6 mb-6 max-w-3xl">
+    <h3 class="font-display text-[20px] mb-5">New Terms</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Restructure Type *</label>
+        <select x-model="form.restructure_type" class="input">
+          <option value="EXTEND_TERM">Extend Term</option>
+          <option value="REDUCE_AMOUNT">Reduce Installment Amount</option>
+          <option value="MORATORIUM">Moratorium (Payment Holiday)</option>
+          <option value="REFINANCE">Refinance</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Reason *</label>
+        <select x-model="form.reason" class="input">
+          <option value="FINANCIAL_HARDSHIP">Financial Hardship</option>
+          <option value="MEDICAL">Medical Emergency</option>
+          <option value="NATURAL_DISASTER">Natural Disaster</option>
+          <option value="BUSINESS_DOWNTURN">Business Downturn</option>
+          <option value="SEASONAL">Seasonal</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">New Start Date *</label>
+        <input type="date" x-model="form.new_start_date" class="input" />
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">New Maturity Date *</label>
+        <input type="date" x-model="form.new_maturity_date" class="input" />
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Number of Installments *</label>
+        <input type="number" x-model.number="form.new_installment_count" class="input" min="1" max="200" />
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Interest Rate (% p.a.) *</label>
+        <input type="number" step="0.01" x-model.number="form.new_interest_rate" class="input" />
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Repayment Frequency *</label>
+        <select x-model="form.new_repayment_frequency" class="input">
+          <option value="DAILY">Daily</option>
+          <option value="WEEKLY">Weekly</option>
+          <option value="BIWEEKLY">Bi-Weekly</option>
+          <option value="MONTHLY">Monthly</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Moratorium (days)</label>
+        <input type="number" x-model.number="form.moratorium_days" class="input" min="0" max="180" />
+      </div>
+      <div class="md:col-span-2">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" x-model="form.waive_penalties" class="w-4 h-4" />
+          <span class="text-[13.5px]">Waive all accrued penalties</span>
+        </label>
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Reason Notes</label>
+        <textarea x-model="form.reason_notes" rows="3" class="input resize-none"
+                  placeholder="Explain why this restructure is needed..."></textarea>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 mt-6">
+      <a href="/app/loans/" class="px-4 py-2 text-[13.5px] text-[var(--ink-2)]">Cancel</a>
+      <button @click="submit()" :disabled="saving" class="btn-primary !w-auto !py-2.5 !px-6 !text-[13.5px] disabled:opacity-50">
+        <span x-text="saving ? 'Submitting…' : 'Submit for approval'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+function restructureWizard(loanId) {
+  return {
+    loanId, loan: null,
+    form: {
+      restructure_type: 'EXTEND_TERM',
+      reason: 'FINANCIAL_HARDSHIP',
+      reason_notes: '',
+      new_start_date: new Date().toISOString().slice(0, 10),
+      new_maturity_date: '',
+      new_installment_count: 6,
+      new_interest_rate: 24,
+      new_repayment_frequency: 'MONTHLY',
+      waive_penalties: false,
+      moratorium_days: 0,
+    },
+    saving: false, error: '',
+    async init() {
+      try {
+        const r = await fetch('/api/loans/admin/' + this.loanId + '/', { headers: { 'Authorization': 'Bearer ' + this.getToken() } });
+        this.loan = await r.json();
+        this.form.new_interest_rate = Number(this.loan.interest_rate || 24);
+        this.form.new_repayment_frequency = this.loan.repayment_frequency || 'MONTHLY';
+        // Default maturity = 6 months from now
+        const m = new Date(); m.setMonth(m.getMonth() + 6);
+        this.form.new_maturity_date = m.toISOString().slice(0, 10);
+      } catch (e) {}
+    },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async submit() {
+      this.saving = true; this.error = '';
+      try {
+        const res = await fetch('/api/restructures/', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + this.getToken(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...this.form, loan: this.loanId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        window.location.href = '/app/restructures/' + data.id + '/';
+      } catch (e) { this.error = e.message; }
+      finally { this.saving = false; }
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('restructureWizard', restructureWizard));
+</script>
+{% endblock %}

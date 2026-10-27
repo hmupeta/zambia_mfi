@@ -1,0 +1,434 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Expense Detail — Nimbus{% endblock %}
+{% block page_title %}Expense Detail{% endblock %}
+
+{% block content %}
+<div x-data="expenseDetailPage" x-init="init()" x-cloak>
+    {% include "partials/breadcrumbs.html" %}
+
+  <a href="/app/expenses/" class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium inline-flex items-center gap-1 mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to expenses
+  </a>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <div x-show="loading" class="text-center py-16 text-[13px] text-[var(--ink-3)]">Loading…</div>
+
+  <template x-if="expense">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left: main info -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- Header card -->
+        <div class="card p-6">
+          <div class="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Expense #</p>
+              <h2 class="font-display text-[26px] tracking-tight mt-0.5" x-text="expense.expense_number"></h2>
+            </div>
+            <span class="pill" :class="statusPill(expense.status)"
+                  x-text="expense.status"></span>
+          </div>
+
+          <p class="text-[22px] font-mono font-medium" x-text="fmtK(expense.amount)"></p>
+          <p class="text-[13.5px] text-[var(--ink-2)] mt-2" x-text="expense.description"></p>
+
+          <div class="grid grid-cols-2 gap-5 mt-6 pt-5 border-t border-[var(--border)]">
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Payee</p>
+              <p x-text="expense.payee"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Date</p>
+              <p x-text="fmtDate(expense.expense_date)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Category</p>
+              <p x-text="expense.category_name || '—'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Branch</p>
+              <p x-text="expense.branch_name || '—'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Payment Method</p>
+              <p x-text="paymentLabel(expense.payment_method)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">External Reference</p>
+              <p class="font-mono" x-text="expense.reference || '—'"></p>
+            </div>
+          </div>
+
+          <div x-show="expense.notes" class="mt-5 pt-5 border-t border-[var(--border)]">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Notes</p>
+            <p class="text-[13.5px] text-[var(--ink-2)] whitespace-pre-wrap" x-text="expense.notes"></p>
+          </div>
+
+          <div x-show="expense.receipt" class="mt-5 pt-5 border-t border-[var(--border)]">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Receipt</p>
+            <a :href="expense.receipt" target="_blank"
+               class="text-[13px] text-[var(--accent)] hover:underline inline-flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              View receipt
+            </a>
+          </div>
+        </div>
+
+        <!-- Approval timeline -->
+        <div class="card p-6">
+          <h3 class="font-display text-[18px] tracking-tight mb-4">Approval History</h3>
+          <div x-show="!expense.approval_log || expense.approval_log.length === 0"
+               class="text-[13px] text-[var(--ink-3)] py-3">
+            No workflow actions yet.
+          </div>
+          <ol class="space-y-4">
+            <template x-for="(a, i) in (expense.approval_log || [])" :key="i">
+              <li class="flex gap-4">
+                <div class="flex flex-col items-center flex-shrink-0">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                       :class="actionColor(a.action)">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <div class="w-px flex-1 bg-[var(--border)] mt-1"
+                       x-show="i < (expense.approval_log.length - 1)"></div>
+                </div>
+                <div class="flex-1 min-w-0 pb-4">
+                  <p class="text-[13.5px] font-medium" x-text="a.action"></p>
+                  <p class="text-[12px] text-[var(--ink-3)] font-mono mt-0.5">
+                    <span x-text="a.user_name || 'System'"></span>
+                    <span class="mx-1">·</span>
+                    <span x-text="fmtDateTime(a.created_at)"></span>
+                  </p>
+                  <p x-show="a.comments"
+                     class="text-[13px] text-[var(--ink-2)] mt-2 p-2 rounded bg-[var(--cream)]"
+                     x-text="a.comments"></p>
+                </div>
+              </li>
+            </template>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Right: actions -->
+      <div class="space-y-4">
+        <div class="card p-5">
+          <h3 class="font-display text-[18px] tracking-tight mb-4">Actions</h3>
+
+          <!-- DRAFT: submit -->
+          <template x-if="expense.status === 'DRAFT'">
+            <div class="space-y-3">
+              <p class="text-[12.5px] text-[var(--ink-3)]">Submit this expense for approval.</p>
+              <button @click="openAction('submit')" :disabled="actionBusy"
+                      class="btn-primary w-full !py-2.5 !text-[13.5px]">
+                <span x-text="actionBusy ? 'Working…' : 'Submit for Approval'"></span>
+              </button>
+            </div>
+          </template>
+
+          <!-- SUBMITTED: approve / reject -->
+          <template x-if="expense.status === 'SUBMITTED'">
+            <div class="space-y-3">
+              <p class="text-[12.5px] text-[var(--ink-3)]">Review and approve or reject this expense.</p>
+              <button @click="openAction('approve')" :disabled="actionBusy"
+                      class="btn-primary w-full !py-2.5 !text-[13.5px]">
+                <span x-text="actionBusy ? 'Working…' : 'Approve'"></span>
+              </button>
+              <button @click="openAction('reject')" :disabled="actionBusy"
+                      class="w-full py-2.5 text-[13.5px] rounded-xl border border-red-200 text-red-700 hover:bg-red-50 transition font-medium">
+                Reject
+              </button>
+            </div>
+          </template>
+
+          <!-- APPROVED: mark paid -->
+          <template x-if="expense.status === 'APPROVED'">
+            <div class="space-y-3">
+              <p class="text-[12.5px] text-[var(--ink-3)]">Mark as paid. This will post the expense to the GL.</p>
+              <button @click="openAction('mark_paid')" :disabled="actionBusy"
+                      class="btn-primary w-full !py-2.5 !text-[13.5px]">
+                <span x-text="actionBusy ? 'Working…' : 'Mark as Paid'"></span>
+              </button>
+            </div>
+          </template>
+
+          <!-- PAID -->
+          <template x-if="expense.status === 'PAID'">
+            <div class="text-center py-2">
+              <div class="w-10 h-10 rounded-full bg-emerald-100 mx-auto flex items-center justify-center mb-2">
+                <svg class="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <p class="text-[13px] text-[var(--ink-2)]">Expense paid and posted to GL.</p>
+              <p x-show="expense.journal_entry_ref"
+                 class="text-[12px] text-[var(--ink-3)] font-mono mt-1">
+                JE: <span x-text="expense.journal_entry_ref"></span>
+              </p>
+            </div>
+          </template>
+
+          <!-- REJECTED -->
+          <template x-if="expense.status === 'REJECTED'">
+            <div class="text-center py-2">
+              <p class="text-[13px] text-red-700">This expense was rejected.</p>
+            </div>
+          </template>
+        </div>
+
+        <!-- Meta card -->
+        <div class="card p-5">
+          <h3 class="font-display text-[16px] tracking-tight mb-3">Record</h3>
+          <dl class="space-y-2 text-[12.5px]">
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Created</dt>
+              <dd class="font-mono text-right" x-text="fmtDate(expense.created_at)"></dd>
+            </div>
+            <div class="flex justify-between gap-3" x-show="expense.submitted_at">
+              <dt class="text-[var(--ink-3)]">Submitted</dt>
+              <dd class="font-mono text-right" x-text="fmtDate(expense.submitted_at)"></dd>
+            </div>
+            <div class="flex justify-between gap-3" x-show="expense.approved_at">
+              <dt class="text-[var(--ink-3)]">Approved</dt>
+              <dd class="font-mono text-right" x-text="fmtDate(expense.approved_at)"></dd>
+            </div>
+            <div class="flex justify-between gap-3" x-show="expense.paid_at">
+              <dt class="text-[var(--ink-3)]">Paid</dt>
+              <dd class="font-mono text-right" x-text="fmtDate(expense.paid_at)"></dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Action modal -->
+  <div x-show="actionModal" x-cloak
+       @keydown.escape.window="actionModal = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="actionModal = null" class="bg-white rounded-2xl p-6 max-w-md w-full">
+      <h3 class="font-display text-[20px] tracking-tight mb-4" x-text="modalTitle"></h3>
+
+      <!-- Reject reason -->
+      <div x-show="actionModal === 'reject'" class="mb-4">
+        <label class="label">Reason for rejection <span class="text-red-500">*</span></label>
+        <textarea x-model="actionForm.reason" rows="3" class="input"
+                  placeholder="Explain why this expense is being rejected"></textarea>
+      </div>
+
+      <!-- Mark paid extras -->
+      <div x-show="actionModal === 'mark_paid'" class="space-y-4 mb-4">
+        <div>
+          <label class="label">Payment Method</label>
+          <select x-model="actionForm.payment_method" class="input">
+            <option value="CASH">Cash</option>
+            <option value="MTN_MOMO">MTN Mobile Money</option>
+            <option value="AIRTEL_MONEY">Airtel Money</option>
+            <option value="BANK">Bank</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Reference <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+          <input type="text" x-model="actionForm.reference" class="input" placeholder="Transaction ref" />
+        </div>
+      </div>
+
+      <!-- Comments for other actions -->
+      <div x-show="actionModal !== 'mark_paid'" class="mb-4">
+        <label class="label">Comments <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+        <textarea x-model="actionForm.comments" rows="2" class="input"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+        <button @click="actionModal = null"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+          Cancel
+        </button>
+        <button @click="submitAction()" :disabled="actionBusy"
+                class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+          <span x-text="actionBusy ? 'Working…' : 'Confirm'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function expenseDetailPage() {
+  const API = '/api/expenses';
+  const EXPENSE_ID = '{{ expense_id }}';
+
+  return {
+    expense: null,
+    loading: false,
+    error: '',
+    message: '',
+    messageType: 'success',
+    actionBusy: false,
+    actionModal: null,
+    actionForm: { reason: '', comments: '', payment_method: 'BANK', reference: '' },
+
+    get modalTitle() {
+      return {
+        submit:    'Submit for Approval',
+        approve:   'Approve Expense',
+        reject:    'Reject Expense',
+        mark_paid: 'Mark Expense as Paid',
+      }[this.actionModal] || '';
+    },
+
+    async init() {
+      await this.load();
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    authHeaders(extra = {}) {
+      return { 'Authorization': 'Bearer ' + this.getToken(), ...extra };
+    },
+
+    async load() {
+      this.loading = true;
+      this.error = '';
+      try {
+        const r = await fetch(`${API}/${EXPENSE_ID}/`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load expense');
+        this.expense = await r.json();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    openAction(kind) {
+      this.actionModal = kind;
+      this.actionForm = { reason: '', comments: '', payment_method: 'BANK', reference: '' };
+    },
+
+    async submitAction() {
+      if (this.actionModal === 'reject' && !this.actionForm.reason.trim()) {
+        this.flash('Rejection reason is required.', 'error');
+        return;
+      }
+
+      this.actionBusy = true;
+      try {
+        let url = `${API}/${EXPENSE_ID}/${this.actionModal}/`;
+        let payload = {};
+
+        if (this.actionModal === 'reject') {
+          payload.comments = this.actionForm.reason;
+        } else if (this.actionModal === 'mark_paid') {
+          payload.payment_method = this.actionForm.payment_method;
+          payload.reference = this.actionForm.reference;
+          payload.comments = this.actionForm.comments;
+        } else {
+          payload.comments = this.actionForm.comments;
+        }
+
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || 'Action failed');
+        }
+
+        this.actionModal = null;
+        this.flash('Action completed successfully.');
+        await this.load();
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.actionBusy = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    statusPill(s) {
+      return {
+        DRAFT:     'pill-neutral',
+        SUBMITTED: 'pill-warning',
+        APPROVED:  'pill-info',
+        PAID:      'pill-success',
+        REJECTED:  'pill-danger',
+      }[s] || 'pill-neutral';
+    },
+
+    actionColor(a) {
+      return {
+        SUBMITTED: 'bg-amber-500',
+        APPROVED:  'bg-blue-500',
+        REJECTED:  'bg-red-500',
+        PAID:      'bg-emerald-500',
+      }[a] || 'bg-gray-400';
+    },
+
+    paymentLabel(pm) {
+      return {
+        CASH:         'Cash',
+        MTN_MOMO:     'MTN Mobile Money',
+        AIRTEL_MONEY: 'Airtel Money',
+        BANK:         'Bank',
+      }[pm] || pm || '—';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('en-GB', {
+          day: 'numeric', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+      } catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('expenseDetailPage', expenseDetailPage);
+});
+</script>
+{% endblock %}

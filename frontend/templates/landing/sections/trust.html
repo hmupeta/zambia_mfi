@@ -1,0 +1,15 @@
+<section class="border-y border-[var(--border)] bg-white">
+  <div class="max-w-[1280px] mx-auto px-6 lg:px-8 py-10">
+    {% if section.eyebrow %}
+    <p class="text-center text-[11px] font-medium tracking-[0.14em] text-[var(--ink-3)] uppercase font-mono mb-7">{{ section.eyebrow }}</p>
+    {% endif %}
+    <div class="grid grid-cols-2 md:grid-cols-{{ section.visible_items|length|default:4 }} gap-6 md:gap-4">
+      {% for item in section.visible_items %}
+      <div class="text-center md:border-r md:last:border-r-0 border-[var(--border)] px-4">
+        <p class="font-display text-[26px] sm:text-[30px] text-[var(--ink)] leading-none">{{ item.title }}</p>
+        {% if item.subtitle %}<p class="text-[12.5px] text-[var(--ink-3)] mt-2">{{ item.subtitle }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,297 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Expenses — Nimbus{% endblock %}
+{% block page_title %}Expenses{% endblock %}
+
+{% block content %}
+<div x-data="expensesPage" x-init="init()" x-cloak>
+    {% include "partials/breadcrumbs.html" %}
+
+  <!-- Toolbar -->
+  <div class="card p-4 mb-6 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[220px]">
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">Search</label>
+      <input type="text" x-model.debounce.400ms="search"
+             @input="reload()"
+             placeholder="expense #, payee, description…"
+             class="input !py-2" />
+    </div>
+    <div class="min-w-[160px]">
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">Category</label>
+      <select x-model="filterCategory" @change="reload()" class="input !py-2">
+        <option value="">All categories</option>
+        <template x-for="c in categories" :key="c.id">
+          <option :value="c.id" x-text="c.name"></option>
+        </template>
+      </select>
+    </div>
+    <div class="min-w-[160px]">
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">Payment</label>
+      <select x-model="filterPaymentMethod" @change="reload()" class="input !py-2">
+        <option value="">All methods</option>
+        <option value="CASH">Cash</option>
+        <option value="MTN_MOMO">MTN Mobile Money</option>
+        <option value="AIRTEL_MONEY">Airtel Money</option>
+        <option value="BANK">Bank</option>
+      </select>
+    </div>
+    <a href="/app/expenses/new/"
+       class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+      New Expense
+    </a>
+  </div>
+
+  <!-- Alerts -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <!-- Status tabs with counts -->
+  <div class="flex flex-wrap gap-2 mb-6">
+    <template x-for="tab in tabs" :key="tab.key">
+      <button @click="status = tab.key; reload()"
+              :class="status === tab.key ? 'btn-primary' : 'btn-secondary'"
+              class="!py-1.5 !px-3 !text-[12.5px] !w-auto flex items-center gap-2">
+        <span x-text="tab.label"></span>
+        <span class="text-[10px] font-mono opacity-70"
+              x-text="counts[tab.key] != null ? counts[tab.key] : ''"></span>
+      </button>
+    </template>
+  </div>
+
+  <!-- Table -->
+  <div class="card p-0 overflow-hidden">
+    <div x-show="loading" class="p-8 text-center text-[13px] text-[var(--ink-3)]">Loading…</div>
+
+    <div x-show="!loading && expenses.length === 0"
+         class="p-12 text-center text-[13px] text-[var(--ink-3)]">
+      No expenses match your filters.
+    </div>
+
+    <table x-show="!loading && expenses.length > 0" class="w-full text-[13px]">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr class="text-left text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+          <th class="px-4 py-3 font-medium">Expense #</th>
+          <th class="px-4 py-3 font-medium">Date</th>
+          <th class="px-4 py-3 font-medium">Payee</th>
+          <th class="px-4 py-3 font-medium">Category</th>
+          <th class="px-4 py-3 font-medium">Payment</th>
+          <th class="px-4 py-3 font-medium text-right">Amount</th>
+          <th class="px-4 py-3 font-medium">Status</th>
+          <th class="px-4 py-3 font-medium"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[var(--border)]">
+        <template x-for="e in expenses" :key="e.id">
+          <tr class="hover:bg-[var(--cream)] transition cursor-pointer"
+              @click="window.location.href = '/app/expenses/' + e.id + '/'">
+            <td class="px-4 py-3 font-mono text-[12.5px]" x-text="e.expense_number"></td>
+            <td class="px-4 py-3" x-text="fmtDate(e.expense_date)"></td>
+            <td class="px-4 py-3">
+              <span class="font-medium" x-text="e.payee"></span>
+            </td>
+            <td class="px-4 py-3 text-[var(--ink-2)]" x-text="e.category_name || '—'"></td>
+            <td class="px-4 py-3 text-[var(--ink-2)]" x-text="paymentLabel(e.payment_method)"></td>
+            <td class="px-4 py-3 text-right font-mono font-medium" x-text="fmtK(e.amount)"></td>
+            <td class="px-4 py-3">
+              <span class="pill" :class="statusPill(e.status)" x-text="e.status"></span>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <svg class="w-4 h-4 text-[var(--ink-4)] inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="total > pageSize" class="flex justify-between items-center mt-4 text-[13px]">
+    <span class="text-[var(--ink-3)] font-mono">
+      <span x-text="total"></span> total
+    </span>
+    <div class="flex gap-2">
+      <button @click="prevPage()" :disabled="!prevUrl"
+              class="btn-secondary !py-1.5 !px-3 !text-[12.5px] !w-auto">← Prev</button>
+      <button @click="nextPage()" :disabled="!nextUrl"
+              class="btn-secondary !py-1.5 !px-3 !text-[12.5px] !w-auto">Next →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function expensesPage() {
+  const API = '/api/expenses';
+
+  return {
+    expenses: [],
+    categories: [],
+    loading: false,
+    search: '',
+    status: '',
+    filterCategory: '',
+    filterPaymentMethod: '',
+    total: 0,
+    pageSize: 25,
+    nextUrl: null,
+    prevUrl: null,
+    message: '',
+    messageType: 'success',
+    counts: {},
+
+    tabs: [
+      { key: '',          label: 'All' },
+      { key: 'DRAFT',     label: 'Draft' },
+      { key: 'SUBMITTED', label: 'Submitted' },
+      { key: 'APPROVED',  label: 'Approved' },
+      { key: 'PAID',      label: 'Paid' },
+      { key: 'REJECTED',  label: 'Rejected' },
+    ],
+
+    async init() {
+      await Promise.all([this.loadCategories(), this.loadCounts(), this.reload()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    authHeaders() {
+      return { 'Authorization': 'Bearer ' + this.getToken() };
+    },
+
+    buildQuery() {
+      const params = new URLSearchParams();
+      params.set('page_size', this.pageSize);
+      if (this.status) params.set('status', this.status);
+      if (this.filterCategory) params.set('category', this.filterCategory);
+      if (this.filterPaymentMethod) params.set('payment_method', this.filterPaymentMethod);
+      if (this.search) params.set('search', this.search);
+      params.set('ordering', '-expense_date');
+      return params.toString();
+    },
+
+    async reload() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/?${this.buildQuery()}`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load expenses');
+        const data = await r.json();
+        this.expenses = data.results || data;
+        this.total = data.count ?? this.expenses.length;
+        this.nextUrl = data.next;
+        this.prevUrl = data.previous;
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadCategories() {
+      try {
+        const r = await fetch(`${API}/categories/?is_active=true&page_size=100`, { headers: this.authHeaders() });
+        if (r.ok) {
+          const data = await r.json();
+          this.categories = data.results || data;
+        }
+      } catch (_) { /* non-fatal */ }
+    },
+
+    async loadCounts() {
+      // Fetch counts for each status in parallel
+      const statuses = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PAID', 'REJECTED'];
+      const results = await Promise.all(
+        statuses.map(s =>
+          fetch(`${API}/?status=${s}&page_size=1`, { headers: this.authHeaders() })
+            .then(r => r.ok ? r.json() : { count: 0 })
+            .catch(() => ({ count: 0 }))
+        )
+      );
+      statuses.forEach((s, i) => { this.counts[s] = results[i].count || 0; });
+      // Also set "All" count
+      const allRes = await fetch(`${API}/?page_size=1`, { headers: this.authHeaders() })
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .catch(() => ({ count: 0 }));
+      this.counts[''] = allRes.count || 0;
+    },
+
+    nextPage() {
+      if (!this.nextUrl) return;
+      this.loadFromUrl(this.nextUrl);
+    },
+
+    prevPage() {
+      if (!this.prevUrl) return;
+      this.loadFromUrl(this.prevUrl);
+    },
+
+    async loadFromUrl(url) {
+      this.loading = true;
+      try {
+        const r = await fetch(url, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load page');
+        const data = await r.json();
+        this.expenses = data.results || data;
+        this.nextUrl = data.next;
+        this.prevUrl = data.previous;
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    statusPill(s) {
+      return {
+        DRAFT:     'pill-neutral',
+        SUBMITTED: 'pill-warning',
+        APPROVED:  'pill-info',
+        PAID:      'pill-success',
+        REJECTED:  'pill-danger',
+      }[s] || 'pill-neutral';
+    },
+
+    paymentLabel(pm) {
+      return {
+        CASH:         'Cash',
+        MTN_MOMO:     'MTN MoMo',
+        AIRTEL_MONEY: 'Airtel Money',
+        BANK:         'Bank',
+      }[pm] || pm || '—';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('expensesPage', expensesPage);
+});
+</script>
+{% endblock %}

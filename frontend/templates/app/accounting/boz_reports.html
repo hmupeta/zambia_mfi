@@ -1,0 +1,564 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}BoZ Reports — Nimbus{% endblock %}
+{% block page_title %}Bank of Zambia Reports{% endblock %}
+
+{% block content %}
+<div x-data="bozReports()" x-init="init()">
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <!-- Alerts -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <!-- Tabs -->
+  <div class="border-b border-[var(--border)] mb-6">
+    <div class="flex gap-1 overflow-x-auto">
+      <button @click="activeTab = 'par'"
+              :class="activeTab === 'par' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+              class="px-4 py-3 text-[13.5px] font-medium transition whitespace-nowrap">Portfolio at Risk</button>
+      <button @click="activeTab = 'npl'"
+              :class="activeTab === 'npl' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+              class="px-4 py-3 text-[13.5px] font-medium transition whitespace-nowrap">NPL Return</button>
+    </div>
+  </div>
+
+  <!-- ══════ PAR ══════ -->
+  <div x-show="activeTab === 'par'" x-cloak>
+    <div class="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+      <label class="text-[13px] text-[var(--ink-2)]">As of</label>
+      <input type="date" x-model="parAsOf" @change="loadPar()" class="input !w-auto" />
+
+      <div class="flex-1"></div>
+
+      <button @click="download('/api/accounting/exports/portfolio-at-risk/', {as_of: parAsOf, format: 'pdf'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        PDF
+      </button>
+      <button @click="download('/api/accounting/exports/portfolio-at-risk/', {as_of: parAsOf, format: 'excel'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-3m3 3V7M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total portfolio</p>
+        <p class="font-display text-[20px] leading-none mt-1.5 tabular-nums font-mono" x-text="fmtMoney(par.total_portfolio)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 1</p>
+        <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums" x-text="(par.par_1?.ratio_percent || 0) + '%'"></p>
+        <p class="text-[11px] text-[var(--ink-3)] mt-1 font-mono" x-text="fmtMoney(par.par_1?.overdue_balance)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 30</p>
+        <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums text-amber-600" x-text="(par.par_30?.ratio_percent || 0) + '%'"></p>
+        <p class="text-[11px] text-[var(--ink-3)] mt-1 font-mono" x-text="fmtMoney(par.par_30?.overdue_balance)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 60</p>
+        <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums" x-text="(par.par_60?.ratio_percent || 0) + '%'"></p>
+        <p class="text-[11px] text-[var(--ink-3)] mt-1 font-mono" x-text="fmtMoney(par.par_60?.overdue_balance)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 90</p>
+        <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums text-red-600" x-text="(par.par_90?.ratio_percent || 0) + '%'"></p>
+        <p class="text-[11px] text-[var(--ink-3)] mt-1 font-mono" x-text="fmtMoney(par.par_90?.overdue_balance)"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ NPL ══════ -->
+  <div x-show="activeTab === 'npl'" x-cloak>
+    <div class="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+      <label class="text-[13px] text-[var(--ink-2)]">As of</label>
+      <input type="date" x-model="nplAsOf" @change="loadNpl()" class="input !w-auto" />
+
+      <div class="flex-1"></div>
+
+      <button @click="openProvisioning()"
+              type="button"
+              class="btn-primary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        Run provisioning
+      </button>
+
+      <button @click="download('/api/accounting/exports/npl-return/', {as_of: nplAsOf, format: 'pdf'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        PDF
+      </button>
+      <button @click="download('/api/accounting/exports/npl-return/', {as_of: nplAsOf, format: 'excel'})"
+              :disabled="downloading"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-3m3 3V7M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total outstanding</p>
+        <p class="font-display text-[20px] leading-none mt-1.5 tabular-nums font-mono" x-text="fmtMoney(npl.totals?.total_outstanding)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total provision</p>
+        <p class="font-display text-[20px] leading-none mt-1.5 tabular-nums font-mono" x-text="fmtMoney(npl.totals?.total_provision)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">NPL outstanding</p>
+        <p class="font-display text-[20px] leading-none mt-1.5 tabular-nums text-red-600 font-mono" x-text="fmtMoney(npl.totals?.npl_outstanding)"></p>
+      </div>
+      <div class="card p-5">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">NPL ratio</p>
+        <p class="font-display text-[24px] leading-none mt-1.5 tabular-nums" x-text="(npl.totals?.npl_ratio_percent || 0) + '%'"></p>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-6 py-4 border-b border-[var(--border)]">
+        <h3 class="font-display text-[20px] tracking-tight">Loan schedule</h3>
+      </div>
+      <div class="overflow-x-auto max-h-[600px]">
+        <table class="w-full">
+          <thead class="bg-[var(--cream)] sticky top-0">
+            <tr>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Loan #</th>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Client</th>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Branch</th>
+              <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Outstanding</th>
+              <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">DPD</th>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Classification</th>
+              <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Provision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in npl.rows || []" :key="row.loan_number">
+              <tr class="border-t border-[var(--border)]"
+                  :class="row.is_npl ? 'bg-red-50/40' : ''">
+                <td class="px-5 py-3 font-mono text-[12.5px] font-medium" x-text="row.loan_number"></td>
+                <td class="px-5 py-3 text-[13px]" x-text="row.client_name"></td>
+                <td class="px-5 py-3 font-mono text-[12px] text-[var(--ink-3)]" x-text="row.branch_code"></td>
+                <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(row.outstanding_balance)"></td>
+                <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono" x-text="row.days_past_due"></td>
+                <td class="px-5 py-3">
+                  <span class="pill" :class="classPill(row.classification)" x-text="row.classification"></span>
+                </td>
+                <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(row.provision_amount)"></td>
+              </tr>
+            </template>
+            <tr x-show="!npl.rows || npl.rows.length === 0">
+              <td colspan="7" class="px-5 py-12 text-center text-[13.5px] text-[var(--ink-3)]">
+                No loan data yet. Run <code class="px-1.5 py-0.5 rounded bg-[var(--cream)] font-mono text-[12px]">python manage.py run_loan_provisioning</code> to generate classifications.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- Provisioning modal (Fixed layout)                          -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <template x-teleport="body">
+    <!-- Outer wrapper allows scrolling on small screens -->
+    <div x-show="provOpen" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
+         @keydown.escape.window="provOpen = false">
+      
+      <!-- Centering container -->
+      <div class="flex min-h-full items-center justify-center p-4 sm:p-6"
+           @click.self="provOpen = false">
+        
+        <!-- Modal card -->
+        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+             @click.stop>
+
+          <!-- 1. Fixed Header -->
+          <div class="p-6 border-b border-[var(--border)] flex items-start justify-between gap-4 shrink-0 bg-white">
+            <div>
+              <h2 class="font-display text-[24px]">Run month-end loan loss provisioning</h2>
+              <p class="text-[13px] text-[var(--ink-2)] mt-1">
+                Calculate expected credit loss on every outstanding loan and post a
+                single journal entry to your General Ledger.
+              </p>
+            </div>
+            <button @click="provOpen = false"
+                    class="text-[var(--ink-3)] hover:text-[var(--ink)] p-1 text-2xl leading-none shrink-0"
+                    aria-label="Close">&times;</button>
+          </div>
+
+          <!-- 2. Scrollable Body -->
+          <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
+            
+            <!-- Explanation Text -->
+            <div class="space-y-4 text-[13.5px] text-[var(--ink-2)] leading-relaxed">
+              <p>
+                <strong class="text-[var(--ink)]">What this does.</strong>
+                Nimbus will calculate the expected credit loss on every outstanding
+                loan as at the date you choose and post a journal entry that adjusts
+                your Loan Loss Provision to match. The entry debits
+                <em>Impairment Expense</em> and credits <em>Loan Loss Provision</em>
+                (or the reverse if the provision needs to fall).
+              </p>
+              <p>
+                <strong class="text-[var(--ink)]">When to run it.</strong>
+                Once per calendar month, on the last working day of the period
+                you're closing. Do not run it mid-month unless a specific event
+                requires it — a large write-off, a restructure, or a Bank of Zambia
+                information request.
+              </p>
+
+              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p class="font-medium text-amber-900 text-[13px] mb-2">
+                  Before you click Post
+                </p>
+                <ol class="list-decimal list-inside space-y-1.5 text-[13px] text-amber-900">
+                  <li>Confirm the date matches the period you're closing.</li>
+                  <li>Check the loan book is up to date — repayments, disbursements, restructures.</li>
+                  <li>Review the movement below. If it looks wrong, close this and check your loan data.</li>
+                  <li>Notify the CFO or MD — the entry posts immediately and appears in Financial Statements.</li>
+                </ol>
+              </div>
+
+              <p class="text-[12.5px]">
+                <strong class="text-[var(--ink)]">Reversal.</strong>
+                If you need to undo this, use <em>Reverse provisioning</em> on the
+                Journal Entries page. Never delete or edit the original — it must
+                remain for audit.
+              </p>
+            </div>
+
+            <!-- Form & Preview -->
+            <div class="space-y-4 pt-4 border-t border-[var(--border)]">
+              <div>
+                <label class="label">As-of date</label>
+                <input type="date" x-model="provAsOf"
+                       @change="fetchProvisioningPreview()"
+                       class="input !w-auto">
+              </div>
+
+              <div x-show="provLoading" class="text-[13px] text-[var(--ink-3)] italic">
+                Calculating…
+              </div>
+
+              <div x-show="provError" x-cloak
+                   class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800"
+                   x-text="provError"></div>
+
+              <template x-if="provPreview && !provLoading && !provError">
+                <div class="space-y-4">
+                  <div class="grid grid-cols-2 gap-4 text-[13px]">
+                    <div>
+                      <p class="text-[var(--ink-3)] text-[11px] uppercase tracking-wider font-mono">Loans</p>
+                      <p class="font-display text-[22px] mt-1 tabular-nums" x-text="provPreview.loans_count"></p>
+                    </div>
+                    <div>
+                      <p class="text-[var(--ink-3)] text-[11px] uppercase tracking-wider font-mono">Total outstanding</p>
+                      <p class="font-display text-[22px] mt-1 tabular-nums" x-text="fmtMoney(provPreview.total_outstanding)"></p>
+                    </div>
+                    <div>
+                      <p class="text-[var(--ink-3)] text-[11px] uppercase tracking-wider font-mono">Current provision (GL)</p>
+                      <p class="font-display text-[22px] mt-1 tabular-nums" x-text="fmtMoney(provPreview.current_provision_gl)"></p>
+                    </div>
+                    <div>
+                      <p class="text-[var(--ink-3)] text-[11px] uppercase tracking-wider font-mono">Required provision</p>
+                      <p class="font-display text-[22px] mt-1 tabular-nums" x-text="fmtMoney(provPreview.required_provision)"></p>
+                    </div>
+                  </div>
+
+                  <div class="rounded-xl border p-4"
+                       :class="provPreview.movement_direction === 'increase'
+                               ? 'border-red-200 bg-red-50'
+                               : provPreview.movement_direction === 'decrease'
+                               ? 'border-emerald-200 bg-emerald-50'
+                               : 'border-[var(--border)] bg-[var(--cream)]'">
+                    <p class="text-[11px] uppercase tracking-wider font-mono"
+                       :class="provPreview.movement_direction === 'increase'
+                               ? 'text-red-800'
+                               : provPreview.movement_direction === 'decrease'
+                               ? 'text-emerald-800'
+                               : 'text-[var(--ink-3)]'">
+                      Movement to post
+                    </p>
+                    <p class="font-display text-[28px] mt-1 tabular-nums"
+                       :class="provPreview.movement_direction === 'increase'
+                               ? 'text-red-900'
+                               : provPreview.movement_direction === 'decrease'
+                               ? 'text-emerald-900'
+                               : 'text-[var(--ink)]'"
+                       x-text="fmtSignedMoney(provPreview.movement, provPreview.movement_direction)">
+                    </p>
+                    <p x-show="provPreview.movement_direction === 'none'"
+                       class="text-[12.5px] text-[var(--ink-3)] mt-2">
+                      No adjustment required — the provision already matches the
+                      calculation for this date.
+                    </p>
+                  </div>
+
+                  <div x-show="provPreview.can_post">
+                    <p class="text-[11px] uppercase tracking-wider font-mono text-[var(--ink-3)] mb-2 mt-4">
+                      Journal entry preview
+                    </p>
+                    <table class="w-full text-[13px]">
+                      <thead>
+                        <tr class="text-[var(--ink-3)] text-[11px] uppercase font-mono border-b border-[var(--border)]">
+                          <th class="text-left pb-2">Account</th>
+                          <th class="text-right pb-2">Debit</th>
+                          <th class="text-right pb-2">Credit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="(line, i) in provPreview.journal_lines" :key="i">
+                          <tr class="border-b border-[var(--border)] last:border-0">
+                            <td class="py-2" x-text="line.account"></td>
+                            <td class="py-2 text-right tabular-nums"
+                                x-text="line.debit !== '0.00' ? fmtMoney(line.debit) : '—'"></td>
+                            <td class="py-2 text-right tabular-nums"
+                                x-text="line.credit !== '0.00' ? fmtMoney(line.credit) : '—'"></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- 3. Fixed Footer -->
+          <div class="p-6 border-t border-[var(--border)] flex justify-end gap-2 shrink-0 bg-[var(--cream)]/50 rounded-b-2xl">
+            <button type="button" @click="provOpen = false"
+                    class="px-4 py-2 rounded-lg border border-[var(--border-2)] hover:bg-[var(--cream)] transition bg-white">
+              Cancel
+            </button>
+            <button type="button" @click="postProvisioning()"
+                    :disabled="!provPreview || !provPreview.can_post || provPosting"
+                    class="btn-primary !w-auto disabled:opacity-50 disabled:cursor-not-allowed">
+              <span x-text="provPosting ? 'Posting…' : 'Post journal entry'"></span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script>
+function bozReports() {
+  return {
+    activeTab: 'par',
+    parAsOf: new Date().toISOString().slice(0,10),
+    nplAsOf: new Date().toISOString().slice(0,10),
+    par: {},
+    npl: { rows: [], totals: {} },
+
+    downloading: false,
+    message: '',
+    messageType: 'success',
+
+    provOpen: false,
+    provLoading: false,
+    provPosting: false,
+    provPreview: null,
+    provError: '',
+    provAsOf: null,
+
+    async init() {
+      await Promise.all([this.loadPar(), this.loadNpl()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async loadPar() {
+      try {
+        const r = await fetch(`/api/accounting/reports/portfolio-at-risk/?as_of=${this.parAsOf}`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (r.ok) this.par = await r.json();
+      } catch (e) { console.error(e); }
+    },
+
+    async loadNpl() {
+      try {
+        const r = await fetch(`/api/accounting/reports/npl-return/?as_of=${this.nplAsOf}`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (r.ok) this.npl = await r.json();
+      } catch (e) { console.error(e); }
+    },
+
+    async download(endpoint, params) {
+      this.downloading = true;
+      this.message = '';
+      try {
+        const url = `${endpoint}?${new URLSearchParams(params).toString()}`;
+        const r = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || `Download failed (HTTP ${r.status})`);
+        }
+
+        const blob = await r.blob();
+        const disposition = r.headers.get('content-disposition') || '';
+        let filename = 'report';
+        const m = disposition.match(/filename="?([^";]+)"?/);
+        if (m) filename = m[1];
+
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+        this.flash(`Downloaded ${filename}`);
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.downloading = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    classPill(c) {
+      return {
+        PERFORMING:   'pill-success',
+        WATCH:        'pill-info',
+        SUBSTANDARD:  'pill-warning',
+        DOUBTFUL:     'pill-danger',
+        LOSS:         'pill-danger',
+      }[c] || 'pill-neutral';
+    },
+
+    fmtMoney(v) {
+      if (v == null || v === '') return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtSignedMoney(v, direction) {
+      if (v == null || v === '') return '—';
+      const n = Math.abs(parseFloat(v));
+      if (isNaN(n)) return '—';
+      const prefix = direction === 'increase' ? '+ ' : direction === 'decrease' ? '− ' : '';
+      return prefix + 'K' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    defaultProvisioningDate() {
+      const d = new Date();
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return last.toISOString().slice(0, 10);
+    },
+
+    openProvisioning() {
+      this.provOpen = true;
+      this.provPreview = null;
+      this.provError = '';
+      if (!this.provAsOf) this.provAsOf = this.defaultProvisioningDate();
+      this.fetchProvisioningPreview();
+    },
+
+    async fetchProvisioningPreview() {
+      this.provLoading = true;
+      this.provPreview = null;
+      this.provError = '';
+      try {
+        const r = await fetch('/api/accounting/provisioning/preview/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({ as_of: this.provAsOf }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || data.detail || `HTTP ${r.status}`);
+        this.provPreview = data;
+      } catch (e) {
+        this.provError = e.message || 'Preview failed.';
+      } finally {
+        this.provLoading = false;
+      }
+    },
+
+    async postProvisioning() {
+      if (!this.provPreview || !this.provPreview.can_post) return;
+      this.provPosting = true;
+      this.provError = '';
+      try {
+        const r = await fetch('/api/accounting/provisioning/post/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({ as_of: this.provAsOf, confirm: true }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || data.detail || `HTTP ${r.status}`);
+
+        this.provOpen = false;
+        this.flash(
+          `Posted ${data.loans_processed} loan provisions. Movement: ` +
+          this.fmtSignedMoney(data.total_movement, 'increase') +
+          ` — as of ${data.as_of}.`,
+          'success'
+        );
+        this.nplAsOf = this.provAsOf;
+        await this.loadNpl();
+      } catch (e) {
+        this.provError = e.message || 'Post failed.';
+      } finally {
+        this.provPosting = false;
+      }
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('bozReports', bozReports));
+</script>
+
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}{{ page.meta_title|default:page.title }}{% endblock %}
+
+{% block content %}
+<header class="bg-[var(--cream)] border-b border-[var(--border)]">
+  <div class="max-w-[1280px] mx-auto px-6 pt-20 pb-16 lg:pt-28 lg:pb-20">
+    <div class="max-w-3xl">
+      <h1 class="font-display text-[48px] sm:text-[64px] lg:text-[76px] leading-[1.02] text-[var(--ink)]">{{ page.title }}</h1>
+      {% if page.subtitle %}<p class="mt-6 text-[17px] text-[var(--ink-2)] leading-[1.7]">{{ page.subtitle }}</p>{% endif %}
+    </div>
+  </div>
+</header>
+
+<section class="py-16 bg-white">
+  <div class="max-w-[1280px] mx-auto px-6 grid lg:grid-cols-2 gap-16">
+    <div>
+      {% if messages %}
+      <div class="mb-6 space-y-2">
+        {% for m in messages %}
+        <div class="px-4 py-3 rounded-lg {% if m.tags == 'success' %}bg-emerald-50 text-emerald-800{% else %}bg-red-50 text-red-800{% endif %} text-sm">
+          {{ m }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <form method="post" action="/contact/submit/" class="space-y-5">
+        {% csrf_token %}
+        <div class="grid sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Name *</label>
+            <input type="text" name="name" required class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition" />
+          </div>
+          <div>
+            <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Email *</label>
+            <input type="email" name="email" required class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition" />
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Phone</label>
+            <input type="tel" name="phone" class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition" />
+          </div>
+          <div>
+            <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Company</label>
+            <input type="text" name="company" class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Subject</label>
+          <input type="text" name="subject" class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition" />
+        </div>
+        <div>
+          <label class="block text-[13px] font-medium text-[var(--ink)] mb-2">Message *</label>
+          <textarea name="message" rows="6" required class="w-full px-4 py-3 rounded-lg border border-[var(--border-2)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/10 transition resize-none"></textarea>
+        </div>
+        <button type="submit" class="btn-primary">Send message</button>
+      </form>
+    </div>
+    <div>
+      {% for block in blocks %}
+        {% render_block block %}
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

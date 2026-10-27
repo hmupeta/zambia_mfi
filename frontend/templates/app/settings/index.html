@@ -1,0 +1,350 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Settings — Nimbus{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div x-data="settingsPage" x-init="init()" x-cloak class="max-w-4xl mx-auto">
+
+  <!-- Alerts -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <div x-show="loading" class="text-center py-16 text-[13px] text-[var(--ink-3)]">Loading…</div>
+
+  <form x-show="!loading" @submit.prevent="save()" class="space-y-6" enctype="multipart/form-data">
+
+    <!-- NEW: Preferences (Dark Mode) -->
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-[14px] font-medium text-[var(--ink)]">Dark Mode</p>
+        <p class="text-[12.5px] text-[var(--ink-3)]">Toggle between light and dark themes for the interface.</p>
+      </div>
+      <button type="button" @click="toggleDarkMode()" 
+              class="relative inline-flex h-6 w-11 items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+              :class="isDark ? 'bg-[var(--accent)]' : 'bg-gray-300'">
+        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out"
+              :class="isDark ? 'translate-x-6' : 'translate-x-1'"></span>
+      </button>
+    </div>
+
+    <!-- Organisation -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] tracking-tight mb-1">Organisation</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-5">Legal identity and contact details.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div class="sm:col-span-2">
+          <label class="label">Legal Name</label>
+          <input type="text" x-model="form.legal_name" class="input" />
+        </div>
+        <div>
+          <label class="label">Trading Name</label>
+          <input type="text" x-model="form.trading_name" class="input" />
+        </div>
+        <div>
+          <label class="label">TIN</label>
+          <input type="text" x-model="form.tin" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">PACRA Number</label>
+          <input type="text" x-model="form.pacra_number" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">BoZ License Number</label>
+          <input type="text" x-model="form.boz_license_number" class="input font-mono" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Physical Address</label>
+          <textarea x-model="form.physical_address" rows="2" class="input"></textarea>
+        </div>
+        <div>
+          <label class="label">Phone</label>
+          <input type="tel" x-model="form.phone" class="input" />
+        </div>
+        <div>
+          <label class="label">Email</label>
+          <input type="email" x-model="form.email" class="input" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Website</label>
+          <input type="url" x-model="form.website" class="input" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Branding -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] tracking-tight mb-1">Branding</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-5">Colors and logo used throughout the app.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="label">Accent Color</label>
+          <div class="flex gap-2">
+            <input type="color" x-model="form.accent_color" class="h-10 w-16 rounded cursor-pointer" />
+            <input type="text" x-model="form.accent_color" class="input font-mono flex-1" />
+          </div>
+        </div>
+        <div>
+          <label class="label">Primary Color</label>
+          <div class="flex gap-2">
+            <input type="color" x-model="form.primary_color" class="h-10 w-16 rounded cursor-pointer" />
+            <input type="text" x-model="form.primary_color" class="input font-mono flex-1" />
+          </div>
+        </div>
+        <div>
+          <label class="label">Logo</label>
+          <input type="file" @change="onFile('logo', $event)" accept="image/*" class="input !py-2" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1" x-show="form.logo instanceof File">
+            New: <span x-text="form.logo?.name"></span>
+          </p>
+        </div>
+        <div>
+          <label class="label">Favicon</label>
+          <input type="file" @change="onFile('favicon', $event)" accept="image/*" class="input !py-2" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1" x-show="form.favicon instanceof File">
+            New: <span x-text="form.favicon?.name"></span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financial -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] tracking-tight mb-1">Financial</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-5">Defaults used across loans, expenses, and reporting.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="label">Default Currency</label>
+          <input type="text" x-model="form.default_currency" maxlength="3" class="input font-mono uppercase" />
+        </div>
+        <div>
+          <label class="label">Fiscal Year Starts (month)</label>
+          <select x-model.number="form.fiscal_year_start_month" class="input">
+            <template x-for="m in 12" :key="m">
+              <option :value="m" x-text="monthName(m)"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="label">Default Interest Rate (%)</label>
+          <input type="number" step="0.01" min="0" x-model="form.default_interest_rate" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Default Penalty Rate (%)</label>
+          <input type="number" step="0.01" min="0" x-model="form.default_penalty_rate" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Default Grace Period (days)</label>
+          <input type="number" min="0" x-model.number="form.default_grace_period_days" class="input" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Operations -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] tracking-tight mb-1">Operations</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-5">Approval thresholds and security policy.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="label">Loan Approval Threshold (ZMW)</label>
+          <input type="number" step="0.01" min="0" x-model="form.loan_approval_threshold" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Expense Approval Threshold (ZMW)</label>
+          <input type="number" step="0.01" min="0" x-model="form.expense_approval_threshold" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Minimum Password Length</label>
+          <input type="number" min="6" max="32" x-model.number="form.password_min_length" class="input" />
+        </div>
+        <div>
+          <label class="label">Session Timeout (minutes)</label>
+          <input type="number" min="5" max="1440" x-model.number="form.session_timeout_minutes" class="input" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" x-model="form.enable_2fa" class="w-4 h-4" />
+            <span class="text-[13.5px]">Enable two-factor authentication (requires email/SMS gateway)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card p-6">
+      <h3 class="font-display text-[20px] tracking-tight mb-1">Notifications</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-5">SMS and email gateway configuration.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="label">SMS Sender ID</label>
+          <input type="text" maxlength="11" x-model="form.sms_sender_id" class="input font-mono uppercase" />
+        </div>
+        <div>
+          <label class="label">SMS Gateway URL</label>
+          <input type="url" x-model="form.sms_gateway_url" class="input font-mono text-[12px]" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">SMS Gateway API Key</label>
+          <input type="password" x-model="form.sms_gateway_api_key" class="input font-mono" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">
+            Stored as plaintext in Phase L. Will be encrypted in a hardening pass.
+          </p>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Email From Address</label>
+          <input type="email" x-model="form.email_from_address" class="input" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3 sticky bottom-4 bg-[var(--cream)] py-3">
+      <button type="submit" :disabled="saving"
+              class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+        <span x-text="saving ? 'Saving…' : 'Save Settings'"></span>
+      </button>
+      <button type="button" @click="load()" :disabled="saving"
+              class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+        Reset
+      </button>
+      <div class="flex-1"></div>
+      <p class="text-[12px] text-[var(--ink-3)]" x-show="lastSaved"
+         x-text="'Last saved: ' + lastSaved"></p>
+    </div>
+  </form>
+</div>
+
+<script>
+function settingsPage() {
+  const API = '/api/auth';   // ← adjust if you mounted core URLs elsewhere
+
+  return {
+    loading: false,
+    saving: false,
+    isDark: false,
+    message: '',
+    messageType: 'success',
+    lastSaved: '',
+    form: {
+      legal_name: '', trading_name: '', tin: '', pacra_number: '', boz_license_number: '',
+      physical_address: '', phone: '', email: '', website: '',
+      accent_color: '#B45309', primary_color: '#0A0A0A',
+      logo: null, favicon: null,
+      default_currency: 'ZMW', fiscal_year_start_month: 1,
+      default_interest_rate: 0, default_penalty_rate: 0, default_grace_period_days: 30,
+      loan_approval_threshold: 0, expense_approval_threshold: 0,
+      password_min_length: 8, session_timeout_minutes: 60, enable_2fa: false,
+      sms_sender_id: '', sms_gateway_url: '', sms_gateway_api_key: '',
+      email_from_address: '',
+    },
+
+    async init() {
+      // Check initial dark mode state
+      this.isDark = document.documentElement.classList.contains('dark');
+      await this.load();
+    },
+
+    toggleDarkMode() {
+      this.isDark = !this.isDark;
+      if (this.isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    authHeaders(extra = {}) {
+      return { 'Authorization': 'Bearer ' + this.getToken(), ...extra };
+    },
+
+    async load() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/settings/`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load settings');
+        const data = await r.json();
+        // Copy server values into form (skip file fields)
+        Object.keys(this.form).forEach(k => {
+          if (k === 'logo' || k === 'favicon') return;
+          if (data[k] !== undefined && data[k] !== null) this.form[k] = data[k];
+        });
+        this.form.logo = null;
+        this.form.favicon = null;
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    onFile(field, event) {
+      const file = event.target.files[0];
+      if (file) this.form[field] = file;
+    },
+
+    async save() {
+      this.saving = true;
+      try {
+        const fd = new FormData();
+        Object.entries(this.form).forEach(([k, v]) => {
+          if (v === null || v === undefined) return;
+          if (typeof v === 'boolean') fd.append(k, v ? 'true' : 'false');
+          else fd.append(k, v);
+        });
+
+        const r = await fetch(`${API}/settings/`, {
+          method: 'PATCH',
+          headers: this.authHeaders(),
+          body: fd,
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || JSON.stringify(err) || 'Save failed');
+        }
+
+        const data = await r.json();
+        this.flash('Settings saved successfully.');
+        this.lastSaved = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        // Reload so the accent color and logo changes take effect immediately
+        setTimeout(() => window.location.reload(), 1200);
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    monthName(m) {
+      return new Date(2026, m - 1, 1).toLocaleString('en-GB', { month: 'long' });
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('settingsPage', settingsPage);
+});
+</script>
+{% endblock %}

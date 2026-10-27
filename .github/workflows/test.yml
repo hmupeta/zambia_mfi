@@ -1,0 +1,64 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_mfi
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Django checks
+        working-directory: ./backend
+        env:
+          DJANGO_ENV: dev
+          DATABASE_URL: postgres://test:test@localhost:5432/test_mfi
+          SECRET_KEY: ci-test-key-not-for-production-use-only-50chars
+        run: python manage.py check
+
+      - name: Run tests
+        working-directory: ./backend
+        env:
+          DJANGO_ENV: dev
+          DATABASE_URL: postgres://test:test@localhost:5432/test_mfi
+          SECRET_KEY: ci-test-key-not-for-production-use-only-50chars
+        run: pytest -v
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/htmlcov
+          retention-days: 14

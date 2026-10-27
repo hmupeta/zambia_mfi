@@ -1,0 +1,12 @@
+<section class="py-16 bg-{% if block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %} border-y border-[var(--border)]">
+  <div class="max-w-[1280px] mx-auto px-6">
+    <div class="grid grid-cols-2 md:grid-cols-{{ block.metadata.items|length }} gap-8 text-center">
+      {% for item in block.metadata.items %}
+      <div>
+        <p class="font-display text-[44px] sm:text-[56px] leading-none {% if block.background == 'dark' %}text-white{% else %}text-[var(--ink)]{% endif %}">{{ item.value }}</p>
+        <p class="mt-3 text-[12px] uppercase tracking-wider {% if block.background == 'dark' %}text-[#71717A]{% else %}text-[var(--ink-3)]{% endif %} font-mono">{{ item.label }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

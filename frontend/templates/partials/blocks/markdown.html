@@ -1,0 +1,5 @@
+<section class="py-16 bg-{% if block.background == 'cream' %}[var(--cream)]{% elif block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %}">
+  <div class="max-w-[760px] mx-auto px-6 prose-nimbus text-{% if block.background == 'dark' %}[#D4D4D8]{% else %}[var(--ink-2)]{% endif %}">
+    {{ block.body|markdownify }}
+  </div>
+</section>

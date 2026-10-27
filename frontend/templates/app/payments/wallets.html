@@ -1,0 +1,499 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Wallets — Nimbus{% endblock %}
+{% block page_title %}Branch Wallets{% endblock %}
+
+{% block content %}
+<div x-data="walletsPage()" x-init="init()">
+
+  <!-- Breadcrumbs -->
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5 flex-wrap" aria-label="Breadcrumb">
+    <a href="/app/dashboard/" class="hover:text-[var(--ink)] transition inline-flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      Dashboard
+    </a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span>Lending</span>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/app/payments/" class="hover:text-[var(--ink)] transition">Payments</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-[var(--ink)] font-medium">Wallets</span>
+  </nav>
+
+  <!-- Header -->
+  <div class="mb-6 flex items-start justify-between flex-wrap gap-4">
+    <div>
+      <h2 class="font-display text-[32px] sm:text-[36px] leading-tight tracking-tight">Branch Wallets</h2>
+      <p class="mt-2 text-[15px] text-[var(--ink-2)]">Cash, mobile money, and bank balances per branch.</p>
+    </div>
+    <button @click="openTransferModal()" class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px] inline-flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+      </svg>
+      Transfer Cash
+    </button>
+  </div>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+       x-text="error"></div>
+
+  <!-- Loading -->
+  <div x-show="loading" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+    <div class="h-32 rounded-2xl bg-[var(--border)]"></div>
+    <div class="h-32 rounded-2xl bg-[var(--border)]"></div>
+    <div class="h-32 rounded-2xl bg-[var(--border)]"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div x-show="!loading" x-cloak class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+
+    <!-- Cash -->
+    <div class="card p-6">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: color-mix(in srgb, #16A34A 12%, transparent);">
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Cash on hand</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+         x-text="fmtMoney(stats.cash)"></p>
+    </div>
+
+    <!-- Mobile Money -->
+    <div class="card p-6">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: color-mix(in srgb, #2563EB 12%, transparent);">
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Mobile Money</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+         x-text="fmtMoney(stats.momo)"></p>
+    </div>
+
+    <!-- Bank -->
+    <div class="card p-6">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: color-mix(in srgb, #7C3AED 12%, transparent);">
+        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Bank balance</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+         x-text="fmtMoney(stats.bank)"></p>
+    </div>
+  </div>
+
+  <!-- Total -->
+  <div x-show="!loading" x-cloak class="card p-6 mb-8">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total branch value</p>
+        <p class="font-display text-[42px] leading-none mt-1 tabular-nums"
+           x-text="fmtMoney(stats.total)"></p>
+      </div>
+      <div class="text-right text-[12.5px] text-[var(--ink-3)] font-mono">
+        <span x-text="stats.total_branches + ' branch' + (stats.total_branches === 1 ? '' : 'es')"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Branch wallets table -->
+  <div class="card overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-[var(--border)]">
+      <h3 class="font-display text-[20px] tracking-tight">Branches</h3>
+      <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5">Click a branch to view details and reconcile.</p>
+    </div>
+
+    <div x-show="walletLoading" class="p-6 space-y-3">
+      <template x-for="i in 3" :key="i">
+        <div class="h-4 rounded bg-[var(--border)] animate-pulse"></div>
+      </template>
+    </div>
+
+    <div x-show="!walletLoading && wallets.length === 0" x-cloak class="p-16 text-center">
+      <p class="text-[13.5px] text-[var(--ink-3)]">No wallets yet.</p>
+    </div>
+
+    <table x-show="!walletLoading && wallets.length > 0" x-cloak class="w-full">
+      <thead class="bg-[var(--cream)]">
+        <tr>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Branch</th>
+          <th class="text-right px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Cash</th>
+          <th class="text-right px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Mobile Money</th>
+          <th class="text-right px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Bank</th>
+          <th class="text-right px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Total</th>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Last Reconciled</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="w in wallets" :key="w.id">
+          <tr class="border-t border-[var(--border)] cursor-pointer hover:bg-[var(--cream)] transition"
+              @click="goToBranch(w.branch)">
+            <td class="px-6 py-3.5">
+              <div class="text-[13.5px] font-medium" x-text="w.branch_name"></div>
+              <div class="text-[11px] text-[var(--ink-3)] font-mono" x-text="w.branch_code"></div>
+            </td>
+            <td class="px-6 py-3.5 text-right tabular-nums text-[13px] font-mono"
+                x-text="fmtMoney(w.cash_balance)"></td>
+            <td class="px-6 py-3.5 text-right tabular-nums text-[13px] font-mono"
+                x-text="fmtMoney(w.mobile_money_balance)"></td>
+            <td class="px-6 py-3.5 text-right tabular-nums text-[13px] font-mono"
+                x-text="fmtMoney(w.bank_balance)"></td>
+            
+            <td class="px-6 py-3.5 text-right tabular-nums text-[13.5px] font-bold font-mono"
+                :class="(Number(w.cash_balance) + Number(w.mobile_money_balance) + Number(w.bank_balance)) < 0 ? 'text-red-600' : ''"
+                x-text="fmtMoney(Number(w.cash_balance) + Number(w.mobile_money_balance) + Number(w.bank_balance))"></td>
+            
+            <td class="px-6 py-3.5">
+              <template x-if="w.last_recon_status">
+                <div>
+                  <span class="pill"
+                        :class="w.last_recon_status.status === 'BALANCED' ? 'pill-success'
+                                : w.last_recon_status.status === 'VARIANCE' ? 'pill-danger'
+                                : 'pill-info'"
+                        x-text="w.last_recon_status.status"></span>
+                  <div class="text-[10.5px] text-[var(--ink-3)] mt-1 font-mono"
+                       x-text="fmtDate(w.last_recon_status.reconciled_at)"></div>
+                </div>
+              </template>
+              <template x-if="!w.last_recon_status">
+                <span class="text-[12px] text-[var(--ink-3)] italic">Never</span>
+              </template>
+            </td>
+            <td class="px-6 py-3.5 text-[var(--ink-4)]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Recent transactions -->
+  <div class="card overflow-hidden">
+    <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h3 class="font-display text-[20px] tracking-tight">Recent transactions</h3>
+        <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5">Wallet movements from disbursements, collections, transfers.</p>
+      </div>
+      <select x-model="txTypeFilter" @change="loadTransactions()" class="input !w-auto">
+        <option value="">All types</option>
+        <option value="DISBURSEMENT">Disbursement</option>
+        <option value="LOAN_COLLECTION">Loan Collection</option>
+        <option value="TRANSFER_IN">Transfer In</option>
+        <option value="TRANSFER_OUT">Transfer Out</option>
+        <option value="EXPENSE">Expense</option>
+      </select>
+    </div>
+
+    <div x-show="txLoading" class="p-6 space-y-3">
+      <template x-for="i in 4" :key="i">
+        <div class="h-4 rounded bg-[var(--border)] animate-pulse"></div>
+      </template>
+    </div>
+
+    <div x-show="!txLoading && transactions.length === 0" x-cloak class="p-16 text-center">
+      <p class="text-[13.5px] text-[var(--ink-3)]">No transactions yet.</p>
+    </div>
+
+    <table x-show="!txLoading && transactions.length > 0" x-cloak class="w-full">
+      <thead class="bg-[var(--cream)]">
+        <tr>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Date</th>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Type</th>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Reference</th>
+          <th class="text-left px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Wallet</th>
+          <th class="text-right px-6 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="tx in transactions" :key="tx.id">
+          <tr class="border-t border-[var(--border)]">
+            <td class="px-6 py-3 text-[12.5px] font-mono text-[var(--ink-3)]"
+                x-text="fmtDateTime(tx.created_at)"></td>
+            <td class="px-6 py-3">
+              <span class="pill" :class="txPill(tx.transaction_type)"
+                    x-text="prettyTxType(tx.transaction_type)"></span>
+            </td>
+            <td class="px-6 py-3 text-[13px] font-mono" x-text="tx.reference || '—'"></td>
+            <td class="px-6 py-3 text-[12.5px] text-[var(--ink-3)]" x-text="walletLabel(tx)"></td>
+            <td class="px-6 py-3 text-right text-[13px] tabular-nums font-medium"
+                x-text="fmtMoney(tx.amount)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Transfer Cash Modal -->
+  <template x-teleport="body">
+    <div x-show="showTransferModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
+         @keydown.escape.window="showTransferModal = false">
+      <div class="flex min-h-full items-center justify-center p-4" @click.self="showTransferModal = false">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" @click.stop>
+          
+          <div class="p-6 border-b border-[var(--border)] shrink-0">
+            <h3 class="font-display text-[22px]">Transfer Cash</h3>
+            <p class="text-[13px] text-[var(--ink-3)] mt-1">Move funds between branch wallets.</p>
+          </div>
+
+          <div class="p-6 space-y-4 overflow-y-auto">
+            <div>
+              <label class="label">From Branch <span class="text-red-500">*</span></label>
+              <select x-model="transferForm.from_branch" class="input">
+                <option value="">Select source branch…</option>
+                <template x-for="b in branches" :key="b.id">
+                  <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+                </template>
+              </select>
+            </div>
+            
+            <div>
+              <label class="label">To Branch <span class="text-red-500">*</span></label>
+              <select x-model="transferForm.to_branch" class="input">
+                <option value="">Select destination branch…</option>
+                <template x-for="b in branches" :key="b.id">
+                  <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="label">Amount (K) <span class="text-red-500">*</span></label>
+                <input type="number" step="0.01" min="1" x-model="transferForm.amount" class="input font-mono" />
+              </div>
+              <div>
+                <label class="label">Channel</label>
+                <select x-model="transferForm.channel" class="input">
+                  <option value="CASH">Cash</option>
+                  <option value="BANK">Bank</option>
+                  <option value="MTN_MOMO">MTN MoMo</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="label">Reference / Notes</label>
+              <input type="text" x-model="transferForm.reference" class="input" placeholder="e.g. Cash top-up for NDL" />
+            </div>
+
+            <div x-show="transferError" x-cloak class="text-red-600 text-[13px] font-medium" x-text="transferError"></div>
+          </div>
+
+          <div class="p-6 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3 shrink-0">
+            <button @click="showTransferModal = false" class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)]">Cancel</button>
+            <button @click="submitTransfer()" :disabled="transferring || !transferForm.amount" class="btn-primary !w-auto !py-2 !px-5 !text-[13.5px] disabled:opacity-50">
+              <span x-text="transferring ? 'Transferring…' : 'Transfer Funds'"></span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function walletsPage() {
+  return {
+    stats: { cash: 0, momo: 0, bank: 0, total: 0, total_branches: 0 },
+    wallets: [],
+    transactions: [],
+    txTypeFilter: '',
+
+    loading: true,
+    walletLoading: true,
+    txLoading: true,
+    error: '',
+
+    // Transfer state
+    showTransferModal: false,
+    transferring: false,
+    transferError: '',
+    transferForm: { from_branch: '', to_branch: '', amount: '', channel: 'CASH', reference: '' },
+    branches: [],
+
+    async init() {
+      await Promise.all([
+        this.loadStats(),
+        this.loadWallets(),
+        this.loadTransactions(),
+        this.loadBranches(),
+      ]);
+      this.loading = false;
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async api(url) {
+      const r = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + this.getToken() },
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    },
+
+    async loadStats() {
+      try {
+        this.stats = await this.api('/api/payments/wallets/stats/');
+      } catch (e) {
+        this.error = 'Could not load wallet stats.';
+        console.error(e);
+      }
+    },
+
+    async loadWallets() {
+      this.walletLoading = true;
+      try {
+        const data = await this.api('/api/payments/wallets/?page_size=200');
+        this.wallets = data.results || data;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        this.walletLoading = false;
+      }
+    },
+
+    async loadTransactions() {
+      this.txLoading = true;
+      try {
+        const params = new URLSearchParams({ page_size: '50' });
+        if (this.txTypeFilter) params.set('transaction_type', this.txTypeFilter);
+        const data = await this.api('/api/payments/transactions/?' + params.toString());
+        this.transactions = data.results || data;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        this.txLoading = false;
+      }
+    },
+
+    async loadBranches() {
+      try {
+        const r = await fetch('/api/auth/branches/?page_size=200', {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() }
+        });
+        if (r.ok) {
+          const data = await r.json();
+          this.branches = data.results || data;
+        }
+      } catch (e) { console.error(e); }
+    },
+
+    openTransferModal() {
+      this.transferForm = { from_branch: '', to_branch: '', amount: '', channel: 'CASH', reference: '' };
+      this.transferError = '';
+      this.showTransferModal = true;
+    },
+
+    async submitTransfer() {
+      if (this.transferForm.from_branch === this.transferForm.to_branch) {
+        this.transferError = 'Source and destination branches must be different.';
+        return;
+      }
+
+      this.transferring = true;
+      this.transferError = '';
+      
+      try {
+        const r = await fetch('/api/payments/wallets/transfer/', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + this.getToken(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(this.transferForm)
+        });
+
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Transfer failed');
+
+        this.showTransferModal = false;
+        await Promise.all([this.loadStats(), this.loadWallets(), this.loadTransactions()]);
+        
+      } catch (e) {
+        this.transferError = e.message;
+      } finally {
+        this.transferring = false;
+      }
+    },
+
+    goToBranch(branchId) {
+      if (!branchId) return;
+      window.location.href = '/app/wallets/' + branchId + '/';
+    },
+
+    fmtMoney(v) {
+      const n = Number(v || 0);
+      return 'K ' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      });
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+
+    prettyTxType(t) {
+      return { DISBURSEMENT: 'Disbursement', LOAN_COLLECTION: 'Loan Collection',
+               TRANSFER_IN: 'Transfer In', TRANSFER_OUT: 'Transfer Out',
+               EXPENSE: 'Expense' }[t] || t;
+    },
+
+    txPill(t) {
+      return { DISBURSEMENT: 'pill-warning', LOAN_COLLECTION: 'pill-success',
+               TRANSFER_IN: 'pill-info', TRANSFER_OUT: 'pill-info',
+               EXPENSE: 'pill-danger' }[t] || 'pill-neutral';
+    },
+
+    walletLabel(tx) {
+      const src = tx.source_wallet ? this.prettyWallet(tx.source_wallet) : '';
+      const dst = tx.dest_wallet ? this.prettyWallet(tx.dest_wallet) : '';
+      if (src && dst) return src + ' → ' + dst;
+      if (dst) return '→ ' + dst;
+      if (src) return src;
+      return '—';
+    },
+
+    prettyWallet(w) {
+      return { CASH: 'Cash', MTN_MOMO: 'MTN', AIRTEL_MONEY: 'Airtel', BANK: 'Bank' }[w] || w;
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('walletsPage', walletsPage);
+});
+</script>
+{% endblock %}

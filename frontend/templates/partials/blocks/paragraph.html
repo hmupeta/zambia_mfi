@@ -1,0 +1,12 @@
+<section class="py-16 bg-{% if block.background == 'cream' %}[var(--cream)]{% elif block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %}">
+  <div class="max-w-[720px] mx-auto px-6">
+    {% if block.title %}
+    <h3 class="font-display text-[28px] sm:text-[34px] text-{% if block.background == 'dark' %}white{% else %}[var(--ink)]{% endif %} mb-4">
+      {{ block.title }}
+    </h3>
+    {% endif %}
+    <div class="prose-nimbus text-{% if block.background == 'dark' %}[#A1A1AA]{% else %}[var(--ink-2)]{% endif %}">
+      {{ block.body|markdownify }}
+    </div>
+  </div>
+</section>

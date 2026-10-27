@@ -1,0 +1,140 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Journal Entry — Nimbus{% endblock %}
+{% block page_title %}Journal Entry{% endblock %}
+
+{% block content %}
+<div x-data="journalEntryDetail('{{ entry_id }}')" x-init="init()">
+
+  <!-- Breadcrumbs -->
+{% include "partials/breadcrumbs.html" %}
+
+  <div class="mb-6">
+    <a href="/app/accounting/journal-entries/"
+       class="inline-flex items-center gap-2 text-[13.5px] text-[var(--ink-2)] hover:text-[var(--accent)] transition group">
+      <svg class="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      All journal entries
+    </a>
+  </div>
+
+  <div x-show="loading" class="animate-pulse">
+    <div class="h-32 rounded-2xl bg-[var(--border)] mb-4"></div>
+    <div class="h-96 rounded-2xl bg-[var(--border)]"></div>
+  </div>
+
+  <template x-if="!loading && je && je.id">
+    <div>
+
+      <!-- Header -->
+      <div class="card p-6 mb-6">
+        <div class="flex items-start justify-between gap-6 flex-wrap">
+          <div>
+            <div class="flex items-center gap-3 flex-wrap mb-3">
+              <h2 class="font-display text-[28px] sm:text-[32px] leading-tight tracking-tight"
+                  x-text="je.reference"></h2>
+              <span class="pill pill-neutral" x-text="je.source_type || '—'"></span>
+              <template x-if="je.is_balanced">
+                <span class="pill pill-success">Balanced</span>
+              </template>
+            </div>
+            <p class="text-[15px] text-[var(--ink-2)] max-w-2xl" x-text="je.description"></p>
+            <div class="mt-3 flex items-center gap-4 text-[12.5px] text-[var(--ink-3)] font-mono flex-wrap">
+              <span x-text="'Date: ' + fmtDate(je.entry_date)"></span>
+              <span>·</span>
+              <span x-text="'Posted by: ' + (je.created_by_username || '—')"></span>
+              <span>·</span>
+              <span x-text="'Branch: ' + (je.branch_code || '—')"></span>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total</p>
+            <p class="font-display text-[36px] leading-none mt-1 tabular-nums"
+               x-text="fmtMoney(je.total_debit)"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lines table -->
+      <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+          <h3 class="font-display text-[20px] tracking-tight">Journal lines</h3>
+          <p class="text-[12.5px] text-[var(--ink-3)]" x-text="(je.lines?.length || 0) + ' lines'"></p>
+        </div>
+        <table class="w-full">
+          <thead class="bg-[var(--cream)]">
+            <tr>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium w-24">Account</th>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Name</th>
+              <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Memo</th>
+              <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Debit</th>
+              <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Credit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="line in (je.lines || [])" :key="line.id">
+              <tr class="border-t border-[var(--border)]">
+                <td class="px-5 py-3 font-mono text-[13px] font-medium" x-text="line.account_code"></td>
+                <td class="px-5 py-3 text-[13.5px]" x-text="line.account_name"></td>
+                <td class="px-5 py-3 text-[13px] text-[var(--ink-2)]" x-text="line.memo || '—'"></td>
+                <td class="px-5 py-3 text-right tabular-nums text-[13.5px]"
+                    :class="Number(line.debit) > 0 ? 'font-medium' : 'text-[var(--ink-3)]'"
+                    x-text="Number(line.debit) > 0 ? fmtMoney(line.debit) : '—'"></td>
+                <td class="px-5 py-3 text-right tabular-nums text-[13.5px]"
+                    :class="Number(line.credit) > 0 ? 'font-medium' : 'text-[var(--ink-3)]'"
+                    x-text="Number(line.credit) > 0 ? fmtMoney(line.credit) : '—'"></td>
+              </tr>
+            </template>
+          </tbody>
+          <tfoot class="bg-[var(--cream)] border-t-2 border-[var(--ink)]">
+            <tr>
+              <td colspan="3" class="px-5 py-3 text-[13px] font-medium">TOTALS</td>
+              <td class="px-5 py-3 text-right tabular-nums text-[14px] font-bold"
+                  x-text="fmtMoney(je.total_debit)"></td>
+              <td class="px-5 py-3 text-right tabular-nums text-[14px] font-bold"
+                  x-text="fmtMoney(je.total_credit)"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function journalEntryDetail(entryId) {
+  return {
+    entryId,
+    loading: true,
+    je: {},
+
+    async init() {
+      try {
+        const r = await fetch(`/api/accounting/journal-entries/${this.entryId}/`, {
+          headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || sessionStorage.getItem('access_token')) },
+        });
+        if (r.ok) this.je = await r.json();
+        else console.error('JE detail fetch failed:', r.status, r.statusText);
+      } catch (e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    fmtMoney(v) {
+      const n = Number(v);
+      if (!isFinite(n)) return 'K 0.00';
+      const body = Math.abs(n).toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      return (n < 0 ? '-K ' : 'K ') + body;
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('journalEntryDetail', journalEntryDetail));
+</script>
+
+{% endblock %}

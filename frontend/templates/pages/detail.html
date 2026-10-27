@@ -1,0 +1,19 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}{{ page.meta_title|default:page.title }}{% endblock %}
+
+{% block content %}
+<header class="bg-[var(--cream)] border-b border-[var(--border)]">
+  <div class="max-w-[1280px] mx-auto px-6 pt-20 pb-16 lg:pt-28 lg:pb-20">
+    <div class="max-w-3xl">
+      <h1 class="font-display text-[48px] sm:text-[64px] lg:text-[76px] leading-[1.02] text-[var(--ink)]">{{ page.title }}</h1>
+      {% if page.subtitle %}<p class="mt-6 text-[17px] text-[var(--ink-2)] leading-[1.7]">{{ page.subtitle }}</p>{% endif %}
+    </div>
+  </div>
+</header>
+
+{% for block in blocks %}
+  {% render_block block %}
+{% endfor %}
+{% endblock %}

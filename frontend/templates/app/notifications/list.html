@@ -1,0 +1,237 @@
+{% extends "app/base_app.html" %}
+{% block title %}Notifications — Nimbus{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block content %}
+<div x-data="notifList()" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/dashboard/" class="hover:text-[var(--ink)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Notifications</span>
+  </nav>
+
+  <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
+    <div>
+      <h2 class="font-display text-[32px] sm:text-[36px] leading-tight tracking-tight">Notifications</h2>
+      <p class="mt-1.5 text-[14px] text-[var(--ink-2)]">Send SMS, WhatsApp, or Email to clients.</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <a href="/app/notifications/templates/" class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">Templates</a>
+      <a href="/app/notifications/settings/" class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">Settings</a>
+      <button @click="openCompose()" class="btn-primary !py-2.5 !px-5 !text-[13px] !w-auto">Compose</button>
+    </div>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+  <div x-show="success" x-cloak class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-800" x-text="success"></div>
+
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total</p><p class="font-display text-[26px] mt-1.5" x-text="stats.total || 0"></p></div>
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Sent</p><p class="font-display text-[26px] mt-1.5 text-emerald-700" x-text="stats.sent || 0"></p></div>
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Failed</p><p class="font-display text-[26px] mt-1.5 text-red-700" x-text="stats.failed || 0"></p></div>
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">SMS</p><p class="font-display text-[26px] mt-1.5" x-text="stats.sms || 0"></p></div>
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">WhatsApp</p><p class="font-display text-[26px] mt-1.5" x-text="stats.whatsapp || 0"></p></div>
+    <div class="card p-4"><p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Email</p><p class="font-display text-[26px] mt-1.5" x-text="stats.email || 0"></p></div>
+  </div>
+
+  <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
+    <input type="search" x-model.debounce.400ms="search" @input="load()" placeholder="Search phone, email, or message…" class="input !w-72" />
+    <select x-model="filterChannel" @change="load()" class="input !w-auto">
+      <option value="">All channels</option>
+      <option value="SMS">SMS</option>
+      <option value="WHATSAPP">WhatsApp</option>
+      <option value="EMAIL">Email</option>
+    </select>
+    <select x-model="filterStatus" @change="load()" class="input !w-auto">
+      <option value="">All statuses</option>
+      <option value="SENT">Sent</option>
+      <option value="FAILED">Failed</option>
+      <option value="QUEUED">Queued</option>
+    </select>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">When</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Channel</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">To</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Message</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="l in logs" :key="l.id">
+          <tr class="border-t border-[var(--border)]">
+            <td class="px-5 py-3 text-[12.5px] font-mono text-[var(--ink-3)]" x-text="fmtDateTime(l.created_at)"></td>
+            <td class="px-5 py-3">
+              <span class="pill"
+                    :class="l.channel === 'SMS' ? 'pill-info' : l.channel === 'WHATSAPP' ? 'pill-success' : 'pill-warning'"
+                    x-text="l.channel"></span>
+            </td>
+            <td class="px-5 py-3 text-[12.5px] font-mono">
+              <div x-text="l.to_number"></div>
+              <div class="text-[11px] text-[var(--ink-3)]" x-text="l.client_name"></div>
+            </td>
+            <td class="px-5 py-3 text-[13px] text-[var(--ink-2)] max-w-md truncate" x-text="l.body"></td>
+            <td class="px-5 py-3">
+              <span class="pill"
+                    :class="l.status === 'SENT' ? 'pill-success' : l.status === 'FAILED' ? 'pill-danger' : 'pill-warning'"
+                    x-text="l.status"></span>
+              <div x-show="l.error" class="text-[10.5px] text-red-600 mt-1 max-w-[200px] truncate" x-text="l.error" :title="l.error"></div>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="!loading && logs.length === 0">
+          <td colspan="5" class="p-16 text-center text-[13.5px] text-[var(--ink-3)]">No notifications yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Compose modal -->
+  <div x-show="showCompose" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showCompose = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showCompose = false">
+      <h3 class="font-display text-[24px] tracking-tight mb-5">Send notification</h3>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Client</label>
+          <select x-model="compose.client" class="input">
+            <option value="">Select client…</option>
+            <template x-for="c in clients" :key="c.id">
+              <option :value="c.id" x-text="c.first_name + ' ' + c.last_name + ' — ' + (c.phone || c.email || '')"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Channel</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button @click="compose.channel = 'SMS'"
+                    :class="compose.channel === 'SMS' ? 'bg-[var(--ink)] text-white' : 'border border-[var(--border)] text-[var(--ink-2)]'"
+                    class="py-2.5 rounded-lg text-[13px] font-medium transition">SMS</button>
+            <button @click="compose.channel = 'WHATSAPP'"
+                    :class="compose.channel === 'WHATSAPP' ? 'bg-[var(--ink)] text-white' : 'border border-[var(--border)] text-[var(--ink-2)]'"
+                    class="py-2.5 rounded-lg text-[13px] font-medium transition">WhatsApp</button>
+            <button @click="compose.channel = 'EMAIL'"
+                    :class="compose.channel === 'EMAIL' ? 'bg-[var(--ink)] text-white' : 'border border-[var(--border)] text-[var(--ink-2)]'"
+                    class="py-2.5 rounded-lg text-[13px] font-medium transition">Email</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Template (optional)</label>
+          <select x-model="compose.template_key" @change="applyTemplate()" class="input">
+            <option value="">— None (freeform) —</option>
+            <template x-for="t in templates" :key="t.id">
+              <option :value="t.key" x-text="t.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <div x-show="compose.channel === 'EMAIL'">
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Subject</label>
+          <input x-model="compose.subject" class="input" placeholder="Email subject" />
+        </div>
+
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Message</label>
+          <textarea x-model="compose.body" rows="5" class="input resize-none" placeholder="Type your message…"></textarea>
+          <p class="text-[11px] text-[var(--ink-3)] mt-1" x-text="compose.body.length + ' characters'"></p>
+        </div>
+      </div>
+
+      <div x-show="composeError" x-cloak class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800" x-text="composeError"></div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showCompose = false" class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">Cancel</button>
+        <button @click="sendCompose()" :disabled="sending" class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px] disabled:opacity-50">
+          <span x-text="sending ? 'Sending…' : 'Send'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function notifList() {
+  return {
+    logs: [], stats: {}, templates: [], clients: [],
+    search: '', filterChannel: '', filterStatus: '',
+    loading: true, error: '', success: '',
+    showCompose: false, composeError: '', sending: false,
+    compose: { client: '', channel: 'SMS', template_key: '', subject: '', body: '' },
+
+    async init() {
+      await Promise.all([this.load(), this.loadStats(), this.loadRefs()]);
+      this.loading = false;
+    },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async api(url, opts = {}) {
+      const r = await fetch(url, { ...opts, headers: { 'Authorization': 'Bearer ' + this.getToken(), 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || e.detail || ('HTTP ' + r.status)); }
+      return r.json();
+    },
+    async load() {
+      this.loading = true;
+      try {
+        const p = new URLSearchParams({ page_size: '100' });
+        if (this.search) p.set('search', this.search);
+        if (this.filterChannel) p.set('channel', this.filterChannel);
+        if (this.filterStatus) p.set('status', this.filterStatus);
+        const d = await this.api('/api/notifications/logs/?' + p);
+        this.logs = d.results || d;
+      } catch (e) { this.error = e.message; }
+      finally { this.loading = false; }
+    },
+    async loadStats() { try { this.stats = await this.api('/api/notifications/logs/stats/'); } catch (e) {} },
+    async loadRefs() {
+      try { const d = await this.api('/api/notifications/templates/?is_active=true&page_size=200'); this.templates = d.results || d; } catch (e) {}
+      try { const d = await this.api('/api/clients/?page_size=500&is_active=true'); this.clients = d.results || d; } catch (e) {}
+    },
+    openCompose() { this.compose = { client: '', channel: 'SMS', template_key: '', subject: '', body: '' }; this.composeError = ''; this.showCompose = true; },
+    applyTemplate() {
+      const t = this.templates.find(x => x.key === this.compose.template_key);
+      if (t) {
+        this.compose.body = t.body;
+        this.compose.subject = t.subject || '';
+        if (['SMS', 'WHATSAPP', 'EMAIL'].includes(t.channel)) this.compose.channel = t.channel;
+      }
+    },
+    async sendCompose() {
+      if (!this.compose.client) { this.composeError = 'Select a client.'; return; }
+      if (!this.compose.body && !this.compose.template_key) { this.composeError = 'Enter a message.'; return; }
+      this.sending = true; this.composeError = '';
+      try {
+        await this.api('/api/notifications/send/one_off/', {
+          method: 'POST',
+          body: JSON.stringify({
+            client: this.compose.client,
+            channel: this.compose.channel,
+            subject: this.compose.subject,
+            body: this.compose.body,
+            template_key: this.compose.template_key,
+          }),
+        });
+        this.showCompose = false;
+        this.success = 'Notification sent.';
+        setTimeout(() => this.success = '', 4000);
+        await Promise.all([this.load(), this.loadStats()]);
+      } catch (e) { this.composeError = e.message; }
+      finally { this.sending = false; }
+    },
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('notifList', notifList));
+</script>
+{% endblock %}

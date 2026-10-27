@@ -1,0 +1,143 @@
+{% extends "app/base_app.html" %}
+{% block title %}Notification Templates — Nimbus{% endblock %}
+{% block page_title %}Notification Templates{% endblock %}
+
+{% block content %}
+<div x-data="notifTemplates()" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/notifications/" class="hover:text-[var(--ink)] transition">Notifications</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Templates</span>
+  </nav>
+
+  <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
+    <div>
+      <h2 class="font-display text-[32px] tracking-tight">Templates</h2>
+      <p class="mt-1.5 text-[14px] text-[var(--ink-2)]">Reusable messages with placeholders.</p>
+    </div>
+    <button @click="newTemplate()" class="btn-primary !py-2.5 !px-5 !text-[13px] !w-auto">New template</button>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Key</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Name</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Channel</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Body</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="t in templates" :key="t.id">
+          <tr class="border-t border-[var(--border)] cursor-pointer hover:bg-[var(--cream)]" @click="edit(t)">
+            <td class="px-5 py-3 font-mono text-[12px]" x-text="t.key"></td>
+            <td class="px-5 py-3 text-[13.5px] font-medium" x-text="t.name"></td>
+            <td class="px-5 py-3"><span class="pill pill-neutral" x-text="t.channel"></span></td>
+            <td class="px-5 py-3 text-[12.5px] text-[var(--ink-3)] max-w-md truncate" x-text="t.body"></td>
+            <td class="px-5 py-3 text-[var(--ink-4)]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="!loading && templates.length === 0">
+          <td colspan="5" class="p-16 text-center text-[13.5px] text-[var(--ink-3)]">No templates yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div x-show="showModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showModal = false">
+      <h3 class="font-display text-[24px] mb-5" x-text="draft.id ? 'Edit template' : 'New template'"></h3>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Key</label>
+          <input x-model="draft.key" class="input font-mono" :disabled="!!draft.id" placeholder="e.g. payment_received" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Name</label>
+          <input x-model="draft.name" class="input" placeholder="Payment Received" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Channel</label>
+          <select x-model="draft.channel" class="input">
+            <option value="SMS">SMS</option>
+            <option value="WHATSAPP">WhatsApp</option>
+            <option value="EMAIL">Email</option>
+            <option value="BOTH">SMS + WhatsApp</option>
+            <option value="ALL">All Channels</option>
+          </select>
+        </div>
+        <div x-show="draft.channel === 'EMAIL' || draft.channel === 'ALL'">
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Email Subject</label>
+          <input x-model="draft.subject" class="input" placeholder="e.g. Payment confirmation" />
+        </div>
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Body</label>
+          <textarea x-model="draft.body" rows="5" class="input resize-none"></textarea>
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">
+            Placeholders: <code class="font-mono">{{ '{{client_name}} {{amount}} {{loan_number}} {{due_date}} {{balance_due}} {{org_name}}' }}</code>
+          </p>
+        </div>
+      </div>
+
+      <div x-show="modalError" x-cloak class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800" x-text="modalError"></div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showModal = false" class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">Cancel</button>
+        <button @click="save()" :disabled="saving" class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px] disabled:opacity-50">
+          <span x-text="saving ? 'Saving…' : 'Save'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function notifTemplates() {
+  return {
+    templates: [], loading: true, error: '',
+    showModal: false, saving: false, modalError: '',
+    draft: { id: '', key: '', name: '', channel: 'SMS', subject: '', body: '' },
+    async init() { await this.load(); },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async api(url, opts = {}) {
+      const r = await fetch(url, { ...opts, headers: { 'Authorization': 'Bearer ' + this.getToken(), 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || e.detail || ('HTTP ' + r.status)); }
+      return r.json();
+    },
+    async load() {
+      this.loading = true;
+      try { const d = await this.api('/api/notifications/templates/?page_size=200'); this.templates = d.results || d; }
+      catch (e) { this.error = e.message; }
+      finally { this.loading = false; }
+    },
+    edit(t) { this.draft = { ...t }; this.modalError = ''; this.showModal = true; },
+    newTemplate() { this.draft = { id: '', key: '', name: '', channel: 'SMS', subject: '', body: '' }; this.modalError = ''; this.showModal = true; },
+    async save() {
+      this.saving = true; this.modalError = '';
+      try {
+        if (this.draft.id) {
+          await this.api('/api/notifications/templates/' + this.draft.id + '/', { method: 'PATCH', body: JSON.stringify(this.draft) });
+        } else {
+          await this.api('/api/notifications/templates/', { method: 'POST', body: JSON.stringify(this.draft) });
+        }
+        this.showModal = false;
+        await this.load();
+      } catch (e) { this.modalError = e.message; }
+      finally { this.saving = false; }
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('notifTemplates', notifTemplates));
+</script>
+{% endblock %}

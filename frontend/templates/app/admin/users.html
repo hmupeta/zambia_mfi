@@ -1,0 +1,1173 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Users — Nimbus{% endblock %}
+{% block page_title %}Users{% endblock %}
+
+{% block content %}
+<div x-data="usersAdminPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" %} 
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Stats bar                                          -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <button @click="clearFilters()"
+            class="card card-hover p-4 text-left transition">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Users</p>
+      <p class="text-[26px] font-display mt-1" x-text="stats.total ?? '—'"></p>
+    </button>
+    <button @click="setStatusFilter('true')"
+            class="card card-hover p-4 text-left transition"
+            :class="filterActive === 'true' && 'ring-2 ring-emerald-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active</p>
+      <p class="text-[26px] font-display mt-1 text-emerald-700" x-text="stats.active ?? '—'"></p>
+    </button>
+    <button @click="setStaffFilter('true')"
+            class="card card-hover p-4 text-left transition"
+            :class="filterStaff === 'true' && 'ring-2 ring-blue-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Staff Access</p>
+      <p class="text-[26px] font-display mt-1 text-blue-700" x-text="stats.staff ?? '—'"></p>
+    </button>
+    <button @click="setStatusFilter('false')"
+            class="card card-hover p-4 text-left transition"
+            :class="filterActive === 'false' && 'ring-2 ring-gray-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Inactive</p>
+      <p class="text-[26px] font-display mt-1 text-[var(--ink-3)]" x-text="stats.inactive ?? '—'"></p>
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Toolbar                                            -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="card p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-3">
+
+      <!-- Search -->
+      <div class="relative flex-1 min-w-[240px]">
+        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)] pointer-events-none"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text"
+               x-model.debounce.400ms="search"
+               @input="reload()"
+               @keydown.escape="search = ''; reload()"
+               placeholder="Search username, name, email, phone…"
+               class="input !py-2 !pl-10 !pr-9" />
+        <button x-show="search" x-cloak @click="search = ''; reload()"
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--ink-3)] hover:text-[var(--ink)]">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Branch filter -->
+      <select x-model="filterBranch" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All branches</option>
+        <template x-for="b in branches" :key="b.id">
+          <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+        </template>
+      </select>
+
+      <!-- Role filter -->
+      <select x-model="filterRole" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All roles</option>
+        <option value="HQ_ADMIN">HQ Admin</option>
+        <option value="HR_PAYROLL">HR & Payroll Manager</option> <!-- NEW ROLE -->
+        <option value="BRANCH_MANAGER">Branch Manager</option>
+        <option value="LOAN_OFFICER">Loan Officer</option>
+        <option value="TELLER">Teller</option>
+      </select>
+
+      <!-- Status -->
+      <select x-model="filterActive" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All statuses</option>
+        <option value="true">Active only</option>
+        <option value="false">Inactive only</option>
+      </select>
+
+      <!-- Sort -->
+      <select x-model="ordering" @change="reload()" class="input !py-2 !w-auto">
+        <option value="username">Username (A→Z)</option>
+        <option value="-username">Username (Z→A)</option>
+        <option value="first_name">First name (A→Z)</option>
+        <option value="-date_joined">Newest first</option>
+        <option value="-last_login">Recently active</option>
+      </select>
+
+      <div class="flex-1"></div>
+
+      <!-- Refresh -->
+      <button @click="reload()" :disabled="loading"
+              class="p-2 rounded-lg text-[var(--ink-2)] hover:bg-black/5 transition"
+              title="Refresh">
+        <svg class="w-4 h-4" :class="loading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
+
+      <!-- Export -->
+      <button @click="exportCsv()" :disabled="!rows.length"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        Export
+      </button>
+
+      <!-- New user -->
+      <button @click="openCreate()"
+              class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        New User
+      </button>
+    </div>
+
+    <!-- Active filter chips -->
+    <div x-show="hasActiveFilters" x-cloak
+         class="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)] flex-wrap">
+      <span class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Filters:</span>
+      <template x-if="search">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--border)] text-[12px]">
+          <span>Search: "<span x-text="search"></span>"</span>
+          <button @click="search = ''; reload()" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+        </span>
+      </template>
+      <template x-if="filterBranch">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--border)] text-[12px]">
+          <span x-text="'Branch: ' + branchLabel(filterBranch)"></span>
+          <button @click="filterBranch = ''; reload()" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+        </span>
+      </template>
+      <template x-if="filterRole">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--border)] text-[12px]">
+          <span x-text="'Role: ' + roleLabel(filterRole)"></span>
+          <button @click="filterRole = ''; reload()" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+        </span>
+      </template>
+      <template x-if="filterActive">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--border)] text-[12px]">
+          <span x-text="filterActive === 'true' ? 'Active only' : 'Inactive only'"></span>
+          <button @click="filterActive = ''; reload()" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+        </span>
+      </template>
+      <template x-if="filterStaff">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--border)] text-[12px]">
+          <span x-text="filterStaff === 'true' ? 'Staff only' : 'Non-staff only'"></span>
+          <button @click="filterStaff = ''; reload()" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+        </span>
+      </template>
+      <button @click="clearFilters()"
+              class="text-[12px] text-[var(--accent)] hover:underline font-medium ml-1">
+        Clear all
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Bulk actions bar                                   -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div x-show="selected.length > 0" x-cloak
+       x-transition
+       class="card p-3 mb-4 flex items-center gap-3"
+       style="background: color-mix(in srgb, var(--accent) 6%, white); border-color: color-mix(in srgb, var(--accent) 30%, transparent);">
+    <span class="text-[13px] font-medium">
+      <span x-text="selected.length"></span>
+      <span x-text="selected.length === 1 ? 'user' : 'users'"></span> selected
+    </span>
+    <div class="flex-1"></div>
+    <button @click="bulkActivate()" :disabled="bulkBusy"
+            class="text-[12.5px] text-emerald-700 hover:text-emerald-900 font-medium px-3">
+      <span x-text="bulkBusy ? 'Working…' : 'Activate'"></span>
+    </button>
+    <button @click="bulkDeactivate()" :disabled="bulkBusy"
+            class="text-[12.5px] text-red-600 hover:text-red-800 font-medium px-3">
+      <span x-text="bulkBusy ? 'Working…' : 'Deactivate'"></span>
+    </button>
+    <button @click="selected = []"
+            class="text-[12.5px] text-[var(--ink-3)] hover:text-[var(--ink)] font-medium px-3">
+      Clear
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Table                                              -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="card p-0 overflow-hidden">
+
+    <!-- Loading skeleton -->
+    <div x-show="loading && !rows.length" class="p-4 space-y-3">
+      <template x-for="i in 5" :key="i">
+        <div class="flex items-center gap-4 animate-pulse">
+          <div class="w-8 h-8 rounded-full bg-[var(--cream)]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[140px]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded flex-1"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[100px]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[80px]"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Empty state -->
+    <div x-show="!loading && rows.length === 0" class="p-16 text-center">
+      <div class="w-14 h-14 rounded-full bg-[var(--cream)] mx-auto flex items-center justify-center mb-4">
+        <svg class="w-6 h-6 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+      </div>
+      <h3 class="font-display text-[20px] tracking-tight mb-1" x-show="hasActiveFilters">
+        No users match these filters
+      </h3>
+      <h3 class="font-display text-[20px] tracking-tight mb-1" x-show="!hasActiveFilters">
+        No users yet
+      </h3>
+      <p class="text-[13px] text-[var(--ink-3)] mb-5"
+         x-text="hasActiveFilters
+                 ? 'Try clearing the filters to see all users.'
+                 : 'Create your first user to give your team access.'"></p>
+      <button x-show="hasActiveFilters" @click="clearFilters()"
+              class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto mb-3">
+        Clear filters
+      </button>
+      <button x-show="!hasActiveFilters" @click="openCreate()"
+              class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        Create first user
+      </button>
+    </div>
+
+    <!-- Table -->
+    <table x-show="!loading || rows.length > 0" class="w-full text-[13px]">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr class="text-left text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+          <th class="pl-4 pr-2 py-3 w-8">
+            <input type="checkbox"
+                   :checked="allSelected"
+                   :indeterminate="someSelected && !allSelected"
+                   @change="toggleSelectAll($event.target.checked)"
+                   class="w-4 h-4 cursor-pointer" />
+          </th>
+          <th class="px-3 py-3 font-medium cursor-pointer select-none hover:text-[var(--ink)]"
+              @click="toggleOrdering('username')">
+            User <span x-text="sortIndicator('username')"></span>
+          </th>
+          <th class="px-3 py-3 font-medium">Role</th>
+          <th class="px-3 py-3 font-medium">Branch</th>
+          <th class="px-3 py-3 font-medium">Contact</th>
+          <th class="px-3 py-3 font-medium">Status</th>
+          <th class="px-3 py-3 font-medium cursor-pointer select-none hover:text-[var(--ink)]"
+              @click="toggleOrdering('last_login')">
+            Last Login <span x-text="sortIndicator('last_login')"></span>
+          </th>
+          <th class="px-4 py-3 font-medium text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[var(--border)]">
+        <template x-for="u in rows" :key="u.id">
+          <tr class="hover:bg-[var(--cream)] transition group cursor-pointer"
+              :class="selected.includes(u.id) && 'bg-[var(--cream)]'"
+              @click="goDetail(u.id)">
+
+            <!-- Checkbox -->
+            <td class="pl-4 pr-2 py-3" @click.stop>
+              <input type="checkbox"
+                     :value="u.id"
+                     :checked="selected.includes(u.id)"
+                     @change="toggleSelect(u.id)"
+                     class="w-4 h-4 cursor-pointer" />
+            </td>
+
+            <!-- User: avatar + name + username -->
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0"
+                     :style="'background: ' + avatarColor(u)"
+                     x-text="initial(u)"></div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <p class="font-medium truncate max-w-[220px]"
+                       x-text="u.full_name || u.username"></p>
+                    <span x-show="u.is_superuser"
+                          class="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 font-mono font-semibold uppercase tracking-wider flex-shrink-0">
+                      SU
+                    </span>
+                  </div>
+                  <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate"
+                     x-text="'@' + u.username"></p>
+                </div>
+              </div>
+            </td>
+
+            <!-- Role -->
+            <td class="px-3 py-3">
+              <span class="pill" :class="rolePill(u.role)"
+                    x-text="u.role_display || roleLabel(u.role) || '—'"></span>
+            </td>
+
+            <!-- Branch -->
+            <td class="px-3 py-3">
+              <template x-if="u.branch_code">
+                <div>
+                  <p class="font-mono text-[12px]" x-text="u.branch_code"></p>
+                  <p class="text-[11px] text-[var(--ink-3)] truncate max-w-[140px]"
+                     x-text="u.branch_name || ''"></p>
+                </div>
+              </template>
+              <template x-if="!u.branch_code">
+                <span class="text-[var(--ink-3)]">—</span>
+              </template>
+            </td>
+
+            <!-- Contact -->
+            <td class="px-3 py-3 text-[12px]">
+              <p class="text-[var(--ink-2)] truncate max-w-[200px]"
+                 :title="u.email"
+                 x-text="u.email || '—'"></p>
+              <p class="text-[var(--ink-3)] font-mono" x-text="u.phone || ''"></p>
+            </td>
+
+            <!-- Status -->
+            <td class="px-3 py-3">
+              <span class="pill" :class="u.is_active ? 'pill-success' : 'pill-neutral'"
+                    x-text="u.is_active ? 'Active' : 'Inactive'"></span>
+            </td>
+
+            <!-- Last Login -->
+            <td class="px-3 py-3">
+              <template x-if="u.last_login">
+                <div>
+                  <p class="text-[12px] font-mono" x-text="fmtDate(u.last_login)"></p>
+                  <p class="text-[11px] text-[var(--ink-3)] font-mono"
+                     x-text="fmtTime(u.last_login)"></p>
+                </div>
+              </template>
+              <template x-if="!u.last_login">
+                <span class="text-[11.5px] text-[var(--ink-3)] font-mono">Never</span>
+              </template>
+            </td>
+
+            <!-- Actions -->
+            <td class="px-4 py-3 text-right" @click.stop>
+              <div class="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+                <button @click="openEdit(u)"
+                        class="p-1.5 rounded text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition"
+                        title="Edit">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                </button>
+                <button @click="toggleActive(u)"
+                        class="p-1.5 rounded transition hover:bg-black/5"
+                        :class="u.is_active ? 'text-red-500 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-800'"
+                        :title="u.is_active ? 'Deactivate' : 'Activate'">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <template x-if="u.is_active">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </template>
+                    <template x-if="!u.is_active">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </template>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Pagination                                         -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div x-show="total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-[13px]">
+    <span class="text-[var(--ink-3)] font-mono text-[12px]">
+      Showing <span x-text="rangeStart"></span>–<span x-text="rangeEnd"></span> of <span x-text="total"></span>
+    </span>
+
+    <div class="flex items-center gap-1">
+      <button @click="prevPage()" :disabled="!prevUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed transition">
+        ← Prev
+      </button>
+      <template x-for="p in pageNumbers" :key="p">
+        <button @click="goToPage(p)"
+                class="min-w-[32px] px-2.5 py-1.5 rounded-lg text-[12.5px] font-mono transition"
+                :class="p === currentPage
+                        ? 'bg-[var(--ink)] text-white'
+                        : 'border border-[var(--border)] hover:bg-[var(--cream)]'"
+                x-text="p"></button>
+      </template>
+      <button @click="nextPage()" :disabled="!nextUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed transition">
+        Next →
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Modal: create / edit                               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div x-show="modal" x-cloak
+       @keydown.escape.window="closeModal()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100">
+
+    <div @click.away="closeModal()"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+         class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <!-- Modal header -->
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0">
+        <div>
+          <h3 class="font-display text-[22px] tracking-tight"
+              x-text="form.id ? 'Edit User' : 'New User'"></h3>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5"
+             x-text="form.id ? 'Update user details and access' : 'Add a new user to the organisation'"></p>
+        </div>
+        <button @click="closeModal()"
+                class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal body -->
+      <div class="p-6 overflow-y-auto">
+
+        <!-- Section: Identity -->
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Identity</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="label">Username <span class="text-red-500">*</span></label>
+            <input type="text" x-model="form.username" required
+                   :disabled="!!form.id"
+                   placeholder="e.g. jphiri"
+                   class="input font-mono"
+                   :class="form.id && 'opacity-60 cursor-not-allowed'" />
+            <p class="text-[11px] text-[var(--ink-3)] mt-1"
+               x-text="form.id ? 'Username cannot be changed once set.' : 'Lowercase, no spaces. Cannot be changed later.'"></p>
+          </div>
+          <div>
+            <label class="label">Email</label>
+            <input type="email" x-model="form.email"
+                   placeholder="user@example.zm"
+                   class="input" />
+          </div>
+        </div>
+
+        <!-- Section: Personal -->
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Personal</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="label">First Name</label>
+            <input type="text" x-model="form.first_name" class="input" />
+          </div>
+          <div>
+            <label class="label">Last Name</label>
+            <input type="text" x-model="form.last_name" class="input" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Phone</label>
+            <input type="tel" x-model="form.phone"
+                   placeholder="+260 971 234567"
+                   class="input" />
+          </div>
+        </div>
+
+        <!-- Section: Access -->
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Access</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="label">Role <span class="text-red-500">*</span></label>
+            <select x-model="form.role" required class="input">
+              <option value="">— Select role —</option>
+              <option value="HQ_ADMIN">HQ Admin</option>
+              <option value="HR_PAYROLL">HR & Payroll Manager</option> <!-- NEW ROLE -->
+              <option value="BRANCH_MANAGER">Branch Manager</option>
+              <option value="LOAN_OFFICER">Loan Officer</option>
+              <option value="TELLER">Teller</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Branch</label>
+            <select x-model="form.branch" class="input">
+              <option value="">— None —</option>
+              <template x-for="b in branches" :key="b.id">
+                <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <!-- Section: Password -->
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">
+          Password <span x-show="form.id" class="text-[var(--ink-4)] normal-case">(leave blank to keep current)</span>
+        </p>
+        <div class="mb-6">
+          <input type="password"
+                 x-model="form.password"
+                 :required="!form.id"
+                 minlength="8"
+                 placeholder="Minimum 8 characters"
+                 class="input"
+                 autocomplete="new-password" />
+        </div>
+
+        <!-- Section: Flags -->
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Status</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-[var(--border)] hover:bg-[var(--cream)] transition">
+            <input type="checkbox" x-model="form.is_active" class="w-4 h-4 mt-0.5" />
+            <div>
+              <p class="text-[13.5px] font-medium">Active</p>
+              <p class="text-[11.5px] text-[var(--ink-3)]">User can sign in and access the system</p>
+            </div>
+          </label>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-[var(--border)] hover:bg-[var(--cream)] transition">
+            <input type="checkbox" x-model="form.is_staff" class="w-4 h-4 mt-0.5" />
+            <div>
+              <p class="text-[13.5px] font-medium">Staff Access</p>
+              <p class="text-[11.5px] text-[var(--ink-3)]">Grant access to internal admin tools</p>
+            </div>
+          </label>
+        </div>
+
+        <!-- Error -->
+        <div x-show="formError" x-cloak
+             class="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800 flex gap-2">
+          <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span x-text="formError"></span>
+        </div>
+      </div>
+
+      <!-- Modal footer -->
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3 flex-shrink-0">
+        <button @click="closeModal()" :disabled="saving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">
+          Cancel
+        </button>
+        <button @click="save()" :disabled="saving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <svg x-show="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <span x-text="saving ? 'Saving…' : (form.id ? 'Save Changes' : 'Create User')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Toast notifications                                -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="fixed bottom-6 right-6 z-[60] space-y-2 pointer-events-none">
+    <template x-for="t in toasts" :key="t.id">
+      <div x-show="t.visible"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 translate-y-2"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0 translate-y-2"
+           class="pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg border min-w-[280px] max-w-[380px]"
+           :class="t.type === 'error'
+                   ? 'bg-red-50 border-red-200 text-red-800'
+                   : 'bg-white border-[var(--border)] text-[var(--ink)]'">
+        <svg x-show="t.type === 'error'" class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <svg x-show="t.type !== 'error'" class="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span class="text-[13px] flex-1" x-text="t.message"></span>
+        <button @click="t.visible = false" class="text-[var(--ink-3)] hover:text-[var(--ink)]">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </template>
+  </div>
+</div>
+
+<script>
+function usersAdminPage() {
+  const API = '/api/auth';
+
+  const ROLE_LABELS = {
+    HQ_ADMIN:       'HQ Admin',
+    HR_PAYROLL:     'HR & Payroll Manager', // <--- ADDED
+    BRANCH_MANAGER: 'Branch Manager',
+    LOAN_OFFICER:   'Loan Officer',
+    TELLER:         'Teller',
+  };
+
+  const ROLE_PILL = {
+    HQ_ADMIN:       'pill-danger',
+    HR_PAYROLL:     'pill-neutral', // <--- ADDED
+    BRANCH_MANAGER: 'pill-warning',
+    LOAN_OFFICER:   'pill-info',
+    TELLER:         'pill-success',
+  };
+
+  const AVATAR_COLORS = [
+    '#B45309', '#0E7490', '#047857', '#7C3AED',
+    '#BE123C', '#0891B2', '#C2410C', '#15803D',
+  ];
+
+  return {
+    rows: [],
+    branches: [],
+    loading: false,
+    saving: false,
+    bulkBusy: false,
+
+    // Filters
+    search: '',
+    filterBranch: '',
+    filterRole: '',
+    filterActive: '',
+    filterStaff: '',
+    ordering: 'username',
+
+    // Pagination
+    total: 0,
+    pageSize: 25,
+    nextUrl: null,
+    prevUrl: null,
+    currentPage: 1,
+
+    // Selection
+    selected: [],
+
+    // Modal
+    modal: false,
+    formError: '',
+    form: {
+      id: null, username: '', email: '', first_name: '', last_name: '',
+      phone: '', role: '', branch: '', password: '',
+      is_active: true, is_staff: false,
+    },
+
+    // Stats
+    stats: { total: null, active: null, inactive: null, staff: null },
+
+    // Toasts
+    toasts: [],
+    _toastId: 0,
+
+    // ────────────────────────────────────────────────────
+    // Lifecycle
+    // ────────────────────────────────────────────────────
+    async init() {
+      // Read filters from URL on first load
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('search')) this.search = params.get('search');
+      if (params.get('branch')) this.filterBranch = params.get('branch');
+      if (params.get('role')) this.filterRole = params.get('role');
+      if (params.get('status')) this.filterActive = params.get('status');
+      if (params.get('staff')) this.filterStaff = params.get('staff');
+      if (params.get('ordering')) this.ordering = params.get('ordering');
+      if (params.get('page')) this.currentPage = parseInt(params.get('page')) || 1;
+
+      await Promise.all([this.loadBranches(), this.loadStats(), this.reload()]);
+
+      // Auto-open edit modal if ?edit=<id> was passed (from detail page)
+      const editId = params.get('edit');
+      if (editId) {
+        const u = this.rows.find(r => r.id === editId);
+        if (u) {
+          this.openEdit(u);
+        } else {
+          fetch(`${API}/users/${editId}/`, { headers: this.authHeaders() })
+            .then(r => r.ok ? r.json() : null)
+            .then(u => { if (u) this.openEdit(u); })
+            .catch(() => {});
+        }
+      }
+
+      // Keyboard shortcut: "n" opens new user modal (when not typing)
+      window.addEventListener('keydown', (e) => {
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        if (e.key === 'n' && !e.metaKey && !e.ctrlKey && !this.modal) {
+          e.preventDefault();
+          this.openCreate();
+        }
+      });
+    },
+
+    // ────────────────────────────────────────────────────
+    // Auth
+    // ────────────────────────────────────────────────────
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+    authHeaders(extra = {}) {
+      return { 'Authorization': 'Bearer ' + this.getToken(), ...extra };
+    },
+
+    // ────────────────────────────────────────────────────
+    // Computed
+    // ────────────────────────────────────────────────────
+    get hasActiveFilters() {
+      return !!(this.search || this.filterBranch || this.filterRole ||
+                this.filterActive || this.filterStaff);
+    },
+    get allSelected() {
+      return this.rows.length > 0 && this.rows.every(r => this.selected.includes(r.id));
+    },
+    get someSelected() {
+      return this.selected.length > 0 && !this.allSelected;
+    },
+    get rangeStart() {
+      return this.total === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1;
+    },
+    get rangeEnd() {
+      return Math.min(this.currentPage * this.pageSize, this.total);
+    },
+    get totalPages() {
+      return Math.max(1, Math.ceil(this.total / this.pageSize));
+    },
+    get pageNumbers() {
+      const t = this.totalPages;
+      const c = this.currentPage;
+      const max = 5;
+      let start = Math.max(1, c - Math.floor(max / 2));
+      let end = Math.min(t, start + max - 1);
+      start = Math.max(1, end - max + 1);
+      const pages = [];
+      for (let i = start; i <= end; i++) pages.push(i);
+      return pages;
+    },
+
+    // ────────────────────────────────────────────────────
+    // Data loading
+    // ────────────────────────────────────────────────────
+    buildQuery() {
+      const p = new URLSearchParams();
+      p.set('page_size', this.pageSize);
+      if (this.search) p.set('search', this.search);
+      if (this.filterBranch) p.set('branch', this.filterBranch);
+      if (this.filterRole) p.set('role', this.filterRole);
+      if (this.filterActive) p.set('is_active', this.filterActive);
+      if (this.filterStaff) p.set('is_staff', this.filterStaff);
+      p.set('ordering', this.ordering);
+      if (this.currentPage > 1) p.set('page', this.currentPage);
+      return p.toString();
+    },
+
+    async reload() {
+      this.loading = true;
+      this.selected = [];
+      try {
+        const r = await fetch(`${API}/users/?${this.buildQuery()}`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load users');
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.total = d.count ?? this.rows.length;
+        this.nextUrl = d.next;
+        this.prevUrl = d.previous;
+        this.syncUrl();
+      } catch (e) {
+        this.toast(e.message, 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadBranches() {
+      try {
+        const r = await fetch(`${API}/branches/?page_size=200&ordering=code`, { headers: this.authHeaders() });
+        if (r.ok) {
+          const d = await r.json();
+          this.branches = d.results || d;
+        }
+      } catch (_) { /* non-fatal */ }
+    },
+
+    async loadStats() {
+      const countOnly = async (qs) => {
+        try {
+          const r = await fetch(`${API}/users/?page_size=1${qs}`, { headers: this.authHeaders() });
+          if (!r.ok) return null;
+          const d = await r.json();
+          return d.count ?? 0;
+        } catch { return null; }
+      };
+
+      const [total, active, staff] = await Promise.all([
+        countOnly(''),
+        countOnly('&is_active=true'),
+        countOnly('&is_staff=true'),
+      ]);
+
+      this.stats.total = total;
+      this.stats.active = active;
+      this.stats.staff = staff;
+      this.stats.inactive = (total != null && active != null) ? total - active : null;
+    },
+
+    syncUrl() {
+      const params = new URLSearchParams();
+      if (this.search) params.set('search', this.search);
+      if (this.filterBranch) params.set('branch', this.filterBranch);
+      if (this.filterRole) params.set('role', this.filterRole);
+      if (this.filterActive) params.set('status', this.filterActive);
+      if (this.filterStaff) params.set('staff', this.filterStaff);
+      if (this.ordering !== 'username') params.set('ordering', this.ordering);
+      if (this.currentPage > 1) params.set('page', this.currentPage);
+
+      const qs = params.toString();
+      const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+      window.history.replaceState({}, '', newUrl);
+    },
+
+    // ────────────────────────────────────────────────────
+    // Filter actions
+    // ────────────────────────────────────────────────────
+    clearFilters() {
+      this.search = '';
+      this.filterBranch = '';
+      this.filterRole = '';
+      this.filterActive = '';
+      this.filterStaff = '';
+      this.ordering = 'username';
+      this.currentPage = 1;
+      this.reload();
+    },
+
+    setStatusFilter(v) {
+      this.filterActive = this.filterActive === v ? '' : v;
+      this.currentPage = 1;
+      this.reload();
+    },
+
+    setStaffFilter(v) {
+      const s = v ? 'true' : 'false';
+      this.filterStaff = this.filterStaff === s ? '' : s;
+      this.currentPage = 1;
+      this.reload();
+    },
+
+    toggleOrdering(field) {
+      if (this.ordering === field) this.ordering = '-' + field;
+      else if (this.ordering === '-' + field) this.ordering = field;
+      else this.ordering = field;
+      this.reload();
+    },
+
+    sortIndicator(field) {
+      if (this.ordering === field) return '↑';
+      if (this.ordering === '-' + field) return '↓';
+      return '';
+    },
+
+    // ────────────────────────────────────────────────────
+    // Pagination
+    // ────────────────────────────────────────────────────
+    nextPage() {
+      if (!this.nextUrl) return;
+      this.currentPage++;
+      this.loadFromUrl(this.nextUrl);
+    },
+    prevPage() {
+      if (!this.prevUrl) return;
+      this.currentPage = Math.max(1, this.currentPage - 1);
+      this.loadFromUrl(this.prevUrl);
+    },
+    goToPage(n) {
+      if (n === this.currentPage) return;
+      this.currentPage = n;
+      this.reload();
+    },
+
+    async loadFromUrl(url) {
+      this.loading = true;
+      try {
+        const r = await fetch(url, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load page');
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.nextUrl = d.next;
+        this.prevUrl = d.previous;
+        this.syncUrl();
+      } catch (e) {
+        this.toast(e.message, 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // ────────────────────────────────────────────────────
+    // Selection
+    // ────────────────────────────────────────────────────
+    toggleSelect(id) {
+      if (this.selected.includes(id)) {
+        this.selected = this.selected.filter(x => x !== id);
+      } else {
+        this.selected = [...this.selected, id];
+      }
+    },
+    toggleSelectAll(checked) {
+      this.selected = checked ? this.rows.map(r => r.id) : [];
+    },
+
+    // ────────────────────────────────────────────────────
+    // Bulk actions
+    // ────────────────────────────────────────────────────
+    async bulkSetActive(active) {
+      if (!this.selected.length) return;
+      this.bulkBusy = true;
+      try {
+        const results = await Promise.allSettled(
+          this.selected.map(id =>
+            fetch(`${API}/users/${id}/`, {
+              method: 'PATCH',
+              headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ is_active: active }),
+            }).then(r => { if (!r.ok) throw new Error('failed'); return r.json(); })
+          )
+        );
+        const ok = results.filter(r => r.status === 'fulfilled').length;
+        const fail = results.length - ok;
+        if (fail) {
+          this.toast(`${ok} updated, ${fail} failed.`, 'error');
+        } else {
+          this.toast(`${ok} user${ok === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}.`);
+        }
+        this.selected = [];
+        await Promise.all([this.loadStats(), this.reload()]);
+      } finally {
+        this.bulkBusy = false;
+      }
+    },
+    bulkActivate()   { return this.bulkSetActive(true); },
+    bulkDeactivate() { return this.bulkSetActive(false); },
+
+    // ────────────────────────────────────────────────────
+    // Single toggle
+    // ────────────────────────────────────────────────────
+    async toggleActive(u) {
+      const verb = u.is_active ? 'Deactivate' : 'Activate';
+      if (!confirm(`${verb} "${u.username}"?`)) return;
+      try {
+        const r = await fetch(`${API}/users/${u.id}/toggle_active/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'Update failed');
+        }
+        this.toast(`User ${u.is_active ? 'deactivated' : 'activated'}.`);
+        await Promise.all([this.loadStats(), this.reload()]);
+      } catch (e) {
+        this.toast(e.message, 'error');
+      }
+    },
+
+    // ────────────────────────────────────────────────────
+    // Modal
+    // ────────────────────────────────────────────────────
+    openCreate() {
+      this.formError = '';
+      this.form = {
+        id: null, username: '', email: '', first_name: '', last_name: '',
+        phone: '', role: '', branch: '', password: '',
+        is_active: true, is_staff: false,
+      };
+      this.modal = true;
+      this.$nextTick(() => {
+        const el = document.querySelector('input[x-model="form.username"]');
+        if (el && !el.disabled) el.focus();
+      });
+    },
+
+    openEdit(u) {
+      this.formError = '';
+      this.form = {
+        id: u.id,
+        username: u.username,
+        email: u.email || '',
+        first_name: u.first_name || '',
+        last_name: u.last_name || '',
+        phone: u.phone || '',
+        role: u.role || '',
+        branch: u.branch || '',
+        password: '',
+        is_active: !!u.is_active,
+        is_staff: !!u.is_staff,
+      };
+      this.modal = true;
+    },
+
+    closeModal() {
+      this.modal = false;
+      this.formError = '';
+    },
+
+    async save() {
+      // Client-side validation
+      if (!this.form.username?.trim()) {
+        this.formError = 'Username is required.';
+        return;
+      }
+      if (!this.form.role) {
+        this.formError = 'Role is required.';
+        return;
+      }
+      if (!this.form.id && (!this.form.password || this.form.password.length < 8)) {
+        this.formError = 'Password must be at least 8 characters for a new user.';
+        return;
+      }
+
+      this.saving = true;
+      this.formError = '';
+
+      try {
+        const isEdit = !!this.form.id;
+        const url = isEdit ? `${API}/users/${this.form.id}/` : `${API}/users/`;
+        const method = isEdit ? 'PATCH' : 'POST';
+
+        const payload = { ...this.form };
+        delete payload.id;
+        if (!payload.password) delete payload.password;
+        if (!payload.branch) payload.branch = null;
+        if (!payload.email) payload.email = '';
+        if (!payload.phone) payload.phone = '';
+        payload.username = payload.username.trim().toLowerCase();
+
+        const r = await fetch(url, {
+          method,
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = Object.entries(err).map(([k, v]) =>
+            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+          ).join(' · ') || 'Save failed';
+          throw new Error(msg);
+        }
+
+        const saved = await r.json();
+        this.modal = false;
+        const name = saved.full_name || saved.username;
+        this.toast(isEdit ? `User "${name}" updated.` : `User "${name}" created.`);
+        await Promise.all([this.loadStats(), this.reload()]);
+      } catch (e) {
+        this.formError = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    // ────────────────────────────────────────────────────
+    // Utility
+    // ────────────────────────────────────────────────────
+    goDetail(id) {
+      window.location.href = `/app/users/${id}/`;
+    },
+
+    initial(u) {
+      const n = u.full_name || u.username || '?';
+      return n.trim()[0]?.toUpperCase() || '?';
+    },
+
+    avatarColor(u) {
+      // Deterministic color from username hash
+      const s = u.username || '';
+      let hash = 0;
+      for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
+      return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+    },
+
+    roleLabel(role) {
+      return ROLE_LABELS[role] || role || '';
+    },
+
+    rolePill(role) {
+      return ROLE_PILL[role] || 'pill-neutral';
+    },
+
+    branchLabel(id) {
+      const b = this.branches.find(x => x.id === id);
+      return b ? b.code : id;
+    },
+
+    exportCsv() {
+      if (!this.rows.length) return;
+      const headers = ['Username', 'Full Name', 'Email', 'Phone', 'Role', 'Branch', 'Staff', 'Status', 'Last Login'];
+      const lines = [headers.join(',')];
+      for (const u of this.rows) {
+        lines.push([
+          u.username,
+          u.full_name || '',
+          u.email || '',
+          u.phone || '',
+          u.role_display || u.role || '',
+          u.branch_code || '',
+          u.is_staff ? 'Yes' : 'No',
+          u.is_active ? 'Active' : 'Inactive',
+          u.last_login || 'Never',
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toast(`Exported ${this.rows.length} user${this.rows.length === 1 ? '' : 's'}.`);
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+
+    fmtTime(iso) {
+      if (!iso) return '';
+      try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+      catch { return ''; }
+    },
+
+    toast(message, type = 'success') {
+      const id = ++this._toastId;
+      this.toasts.push({ id, message, type, visible: true });
+      setTimeout(() => {
+        const t = this.toasts.find(x => x.id === id);
+        if (t) t.visible = false;
+        setTimeout(() => {
+          this.toasts = this.toasts.filter(x => x.id !== id);
+        }, 200);
+      }, 3500);
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('usersAdminPage', usersAdminPage);
+});
+</script>
+{% endblock %}

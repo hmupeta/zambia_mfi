@@ -1,0 +1,31 @@
+{% load nimbus_icons %}
+<section class="block-surface-{{ block.background }} py-20">
+  <div class="max-w-[1280px] mx-auto px-6">
+    {% if block.title %}
+      <div class="max-w-3xl mb-12">
+        <h2 class="block-heading font-display text-[36px] sm:text-[48px] leading-[1.05]">
+          {{ block.title }}
+        </h2>
+        {% if block.subtitle %}
+          <p class="block-muted mt-4 text-[16px] max-w-2xl">{{ block.subtitle }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {% for item in block.metadata.items %}
+        <div class="block-card rounded-2xl p-6">
+          {% if item.icon %}
+            <div class="block-icon-bg w-10 h-10 rounded-lg flex items-center justify-center mb-4">
+              <svg class="text-white" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="{% icon_path item.icon %}"/>
+              </svg>
+            </div>
+          {% endif %}
+          <h3 class="block-card-title text-[17px] font-semibold mb-2">{{ item.title }}</h3>
+          <p class="block-card-body text-[14.5px] leading-[1.65]">{{ item.description }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

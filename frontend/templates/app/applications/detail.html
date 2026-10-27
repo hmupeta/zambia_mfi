@@ -1,0 +1,645 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Application — Nimbus{% endblock %}
+{% block page_title %}Application Detail{% endblock %}
+
+{% block content %}
+<div x-data="applicationDetail('{{ application_id }}')" x-init="init()">
+
+  <!-- ══════ Breadcrumbs ══════ -->
+  <nav class="mb-6 flex items-center gap-2 text-[13px] text-[var(--ink-3)]" aria-label="Breadcrumb">
+    <a href="/app/dashboard/" class="hover:text-[var(--accent)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/app/applications/" class="hover:text-[var(--accent)] transition">Applications</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-[var(--ink)] font-medium" x-text="app?.application_number || 'Loading…'"></span>
+  </nav>
+
+  <!-- ══════ Back link ══════ -->
+  <div class="mb-6">
+    <a href="/app/applications/"
+       class="inline-flex items-center gap-2 text-[13.5px] text-[var(--ink-2)] hover:text-[var(--accent)] transition group">
+      <svg class="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+      All applications
+    </a>
+  </div>
+
+  <!-- Loading skeleton -->
+  <div x-show="loading" class="animate-pulse">
+    <div class="h-8 w-64 rounded bg-[var(--border)] mb-4"></div>
+    <div class="h-40 rounded bg-[var(--border)] mb-4"></div>
+    <div class="h-64 rounded bg-[var(--border)]"></div>
+  </div>
+
+  <!-- ⬇ FIXED: x-if instead of x-show so children aren't evaluated when app is null -->
+  <template x-if="app">
+    <div>
+
+    <!-- ─── Header ─── -->
+    <div class="card p-6 mb-6">
+      <div class="flex items-start justify-between gap-6 flex-wrap">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-3 flex-wrap mb-2">
+            <h2 class="font-display text-[28px] sm:text-[34px] leading-tight tracking-tight"
+                x-text="app.application_number"></h2>
+            <span class="pill" :class="statusPill(app.status)" x-text="prettyStatus(app.status)"></span>
+            <template x-if="app.credit_score_grade">
+              <span class="pill pill-info" x-text="'Grade ' + app.credit_score_grade"></span>
+            </template>
+          </div>
+          <p class="text-[14.5px] text-[var(--ink-2)]">
+            <span x-text="app.client_name"></span>
+            <span class="mx-2">·</span>
+            <span class="font-mono text-[13px]" x-text="app.client_phone"></span>
+            <span class="mx-2">·</span>
+            <span x-text="app.product_name"></span>
+          </p>
+          <div class="mt-3 flex items-center gap-4 text-[12.5px] text-[var(--ink-3)] font-mono flex-wrap">
+            <span x-text="'Branch: ' + app.branch_code"></span>
+            <span x-show="app.current_stage_name">·</span>
+            <span x-show="app.current_stage_name" x-text="'Stage: ' + app.current_stage_name"></span>
+            <span x-show="app.loan_number">·</span>
+            <span x-show="app.loan_number" x-text="'Loan: ' + app.loan_number"></span>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Requested</p>
+          <p class="font-display text-[40px] leading-none mt-1 tabular-nums" x-text="fmtMoney(app.requested_amount)"></p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1"
+             x-text="app.requested_tenure_months + ' months · ' + (app.requested_repayment_frequency || '').toLowerCase()"></p>
+        </div>
+      </div>
+
+      <div x-show="flashError" x-cloak
+           class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+           x-text="flashError"></div>
+      <div x-show="flashSuccess" x-cloak
+           class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-800"
+           x-text="flashSuccess"></div>
+
+      <!-- Workflow progress -->
+      <div class="mt-6 pt-6 border-t border-[var(--border)]">
+        <div class="flex items-center gap-2 flex-wrap">
+          <template x-for="(stage, idx) in workflowStages" :key="stage.id">
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-[12.5px] font-medium transition"
+                   :class="stageStateClass(stage)"
+                   :title="'Requires ' + stage.role_required">
+                <svg x-show="stageState(stage) === 'complete'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span x-text="stage.order + '. ' + stage.name"></span>
+              </div>
+              <svg x-show="idx < workflowStages.length - 1" class="w-4 h-4 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </template>
+          <template x-if="workflowStages.length === 0">
+            <span class="text-[13px] text-[var(--ink-3)]">No workflow assigned yet.</span>
+          </template>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="mt-6 pt-6 border-t border-[var(--border)] flex items-center gap-3 flex-wrap">
+        <template x-if="canSubmit()">
+          <button @click="doAction('submit', 'Submit for review?')"
+                  class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+            Submit for review
+          </button>
+        </template>
+
+        <template x-if="app.can_current_user_act">
+          <button @click="doAction('advance', 'Advance to next stage?')"
+                  class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+            <span x-text="nextActionLabel()"></span>
+          </button>
+        </template>
+
+        <template x-if="app.can_current_user_act && canReject()">
+          <button @click="promptReject()"
+                  class="!w-auto px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-red-200 text-red-700 hover:bg-red-50 transition">
+            Reject
+          </button>
+        </template>
+
+        <template x-if="canReturn()">
+          <button @click="doAction('return_to_applicant', 'Return to applicant?')"
+                  class="!w-auto px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+            Return
+          </button>
+        </template>
+
+        <template x-if="canWithdraw()">
+          <button @click="doAction('withdraw', 'Withdraw this application?')"
+                  class="!w-auto px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+            Withdraw
+          </button>
+        </template>
+
+        <template x-if="canDisburse()">
+          <button @click="promptDisburse()"
+                  :disabled="submitting"
+                  class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px] inline-flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Disburse Funds
+          </button>
+        </template>
+
+        <span x-show="app.action_block_reason" class="text-[12.5px] text-[var(--ink-3)] italic ml-2"
+              x-text="app.action_block_reason"></span>
+      </div>
+    </div>
+
+    <!-- ─── Two-column grid ─── -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Appraisal data -->
+        <div class="card p-6">
+          <h3 class="font-display text-[20px] tracking-tight mb-5">Appraisal</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-5">
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Monthly income</p>
+              <p class="text-[15px] tabular-nums" x-text="fmtMoney(app.monthly_income)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Monthly expenses</p>
+              <p class="text-[15px] tabular-nums" x-text="fmtMoney(app.monthly_expenses)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Existing debts</p>
+              <p class="text-[15px] tabular-nums" x-text="fmtMoney(app.existing_debts)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Net worth</p>
+              <p class="text-[15px] tabular-nums" x-text="fmtMoney(app.net_worth)"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Credit score</p>
+              <p class="text-[15px] tabular-nums" x-text="app.credit_score != null ? app.credit_score : '—'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Purpose</p>
+              <p class="text-[15px]" x-text="prettyPurpose(app.purpose)"></p>
+            </div>
+          </div>
+
+          <div class="mt-5 pt-5 border-t border-[var(--border)] space-y-4">
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Collateral</p>
+              <p class="text-[14px] text-[var(--ink-2)]" x-text="app.collateral_summary || '—'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Guarantor</p>
+              <p class="text-[14px] text-[var(--ink-2)]" x-text="app.guarantor_summary || '—'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Appraisal notes</p>
+              <p class="text-[14px] text-[var(--ink-2)]" x-text="app.appraisal_notes || '—'"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="card p-6">
+          <h3 class="font-display text-[20px] tracking-tight mb-5">Activity</h3>
+          <div class="relative pl-6" x-show="app.transitions && app.transitions.length > 0">
+            <div class="absolute left-1.5 top-2 bottom-2 w-px bg-[var(--border-2)]"></div>
+            <template x-for="(t, i) in app.transitions" :key="t.id">
+              <div class="relative pb-5 last:pb-0">
+                <div class="absolute -left-4 top-1 w-3 h-3 rounded-full border-2 border-white"
+                     :style="'background:' + actionColor(t.action)"></div>
+                <p class="text-[13.5px] font-medium">
+                  <span x-text="prettyAction(t.action)"></span>
+                  <span class="text-[var(--ink-3)] font-normal"> by </span>
+                  <span class="font-mono text-[12.5px]" x-text="t.username"></span>
+                </p>
+                <p class="text-[12px] text-[var(--ink-3)] mt-0.5" x-text="fmtDateTime(t.created_at)"></p>
+                <p x-show="t.comments" class="text-[13px] text-[var(--ink-2)] mt-1.5 italic"
+                   x-text="'&ldquo;' + t.comments + '&rdquo;'"></p>
+              </div>
+            </template>
+          </div>
+          <p x-show="!app.transitions || app.transitions.length === 0"
+             class="text-[13.5px] text-[var(--ink-3)]">No activity yet.</p>
+        </div>
+      </div>
+
+      <!-- Right column -->
+      <div class="space-y-6">
+        <div class="card p-6">
+          <h3 class="font-display text-[20px] tracking-tight mb-4">Client</h3>
+          <dl class="space-y-3 text-[13.5px]">
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Name</dt>
+              <dd class="text-right font-medium" x-text="app.client_name"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Phone</dt>
+              <dd class="text-right font-mono text-[12.5px]" x-text="app.client_phone"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Branch</dt>
+              <dd class="text-right font-mono text-[12.5px]" x-text="app.branch_code"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Officer</dt>
+              <dd class="text-right" x-text="app.loan_officer_name || '—'"></dd>
+            </div>
+          </dl>
+          <a :href="'/app/clients/' + app.client + '/'"
+             class="mt-4 block text-center text-[13px] font-medium text-[var(--accent)] hover:underline">
+            View client profile →
+          </a>
+        </div>
+
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display text-[20px] tracking-tight">Documents</h3>
+            <span class="pill pill-neutral" x-text="(app.documents ? app.documents.length : 0) + ' files'"></span>
+          </div>
+          <div x-show="app.documents && app.documents.length > 0" class="space-y-2">
+            <template x-for="doc in app.documents" :key="doc.id">
+              <a :href="doc.file" target="_blank"
+                 class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--cream)] transition">
+                <div class="w-8 h-8 rounded-lg bg-[var(--cream)] flex items-center justify-center flex-shrink-0">
+                  <svg class="w-4 h-4 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-medium truncate" x-text="doc.document_type"></p>
+                  <p class="text-[11px] text-[var(--ink-3)] truncate"
+                     x-text="doc.notes || 'Uploaded ' + fmtDate(doc.uploaded_at)"></p>
+                </div>
+              </a>
+            </template>
+          </div>
+          <p x-show="!app.documents || app.documents.length === 0"
+             class="text-[13.5px] text-[var(--ink-3)]">No documents uploaded.</p>
+        </div>
+
+        <div class="card p-6" x-show="app.reviews && app.reviews.length > 0">
+          <h3 class="font-display text-[20px] tracking-tight mb-4">Reviews</h3>
+          <div class="space-y-3">
+            <template x-for="review in app.reviews" :key="review.id">
+              <div class="p-3 rounded-lg bg-[var(--cream)]">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[13px] font-medium" x-text="review.username"></span>
+                  <span class="pill" :class="reviewPill(review.recommendation)" x-text="review.recommendation"></span>
+                </div>
+                <p class="text-[12px] text-[var(--ink-3)]" x-text="fmtDateTime(review.created_at)"></p>
+                <p x-show="review.comments" class="text-[13px] text-[var(--ink-2)] mt-2" x-text="review.comments"></p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+  </template>
+
+  <!-- Reject modal -->
+  <div x-show="showRejectModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showRejectModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" @click.away="showRejectModal = false">
+      <h3 class="font-display text-[24px] tracking-tight mb-2">Reject application</h3>
+      <p class="text-[13.5px] text-[var(--ink-2)] mb-4">Please provide a reason.</p>
+      <textarea x-model="rejectReason" rows="4" class="input resize-none" placeholder="Reason for rejection..."></textarea>
+      <div class="flex justify-end gap-3 mt-5">
+        <button @click="showRejectModal = false"
+                class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">Cancel</button>
+        <button @click="confirmReject()" :disabled="!rejectReason.trim() || submitting"
+                class="px-5 py-2.5 text-[13.5px] font-medium rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition">
+          Reject application
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disburse modal -->
+  <div x-show="showDisburseModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showDisburseModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showDisburseModal = false">
+      <h3 class="font-display text-[24px] tracking-tight mb-2">Disburse funds</h3>
+      <p class="text-[13.5px] text-[var(--ink-2)] mb-5">
+        This will release <strong x-text="fmtMoney(app?.requested_amount)"></strong> to
+        <strong x-text="app?.client_name"></strong> and post a journal entry:
+        DR Loans Receivable / CR selected channel.
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">
+            Disbursement channel
+          </label>
+          <select x-model="disburseChannel" class="input">
+            <option value="BANK">Bank Transfer (1020)</option>
+            <option value="CASH">Cash (1010)</option>
+            <option value="MTN_MOMO">MTN Mobile Money (1030)</option>
+            <option value="AIRTEL_MONEY">Airtel Money (1030)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">
+            Reference (optional)
+          </label>
+          <input type="text" x-model="disburseReference" class="input"
+                 placeholder="e.g. Transaction reference / cheque number" />
+        </div>
+
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">
+            Disbursement date
+          </label>
+          <input type="date" x-model="disburseDate" class="input" />
+        </div>
+      </div>
+
+      <div x-show="flashError" x-cloak
+           class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+           x-text="flashError"></div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showDisburseModal = false"
+                class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">Cancel</button>
+        <button @click="confirmDisburse()" :disabled="submitting"
+                class="px-5 py-2.5 text-[13.5px] font-medium rounded-xl bg-[var(--ink)] text-white hover:opacity-90 disabled:opacity-50 transition">
+          <span x-text="submitting ? 'Disbursing…' : 'Confirm Disbursement'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function applicationDetail(applicationId) {
+  return {
+    applicationId,
+    loading: true,
+    submitting: false,
+    app: null,
+    workflowStages: [],
+
+    showRejectModal: false,
+    rejectReason: '',
+
+    showDisburseModal: false,
+    disburseChannel: 'BANK',
+    disburseReference: '',
+    disburseDate: new Date().toISOString().slice(0, 10),
+
+    flashError: '',
+    flashSuccess: '',
+
+    async init() {
+      await this.fetchApp();
+      if (this.app?.workflow_template) await this.fetchWorkflow();
+      this.loading = false;
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async fetchApp() {
+      try {
+        const r = await fetch(`/api/origination/applications/${this.applicationId}/`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (!r.ok) throw new Error('Not found');
+        this.app = await r.json();
+      } catch (e) {
+        this.flashError = 'Could not load application.';
+      }
+    },
+
+    async fetchWorkflow() {
+      try {
+        const r = await fetch(`/api/origination/workflows/${this.app.workflow_template}/`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (r.ok) {
+          const data = await r.json();
+          this.workflowStages = data.stages || [];
+        }
+      } catch (e) {}
+    },
+
+    canSubmit()      { return this.app && ['DRAFT', 'RETURNED'].includes(this.app.status); },
+    canReject()      { return this.app && ['SUBMITTED', 'UNDER_REVIEW'].includes(this.app.status); },
+    canReturn()      { return this.app && ['SUBMITTED', 'UNDER_REVIEW'].includes(this.app.status); },
+    canWithdraw()    { return this.app && !['DISBURSED', 'REJECTED', 'WITHDRAWN', 'APPROVED'].includes(this.app.status); },
+    canDisburse()    { return this.app && this.app.status === 'APPROVED'; },
+
+    nextActionLabel(){ return this.app?.current_stage?.is_final ? 'Approve' : 'Advance'; },
+
+    async doAction(action, confirmMsg) {
+      if (confirmMsg && !confirm(confirmMsg)) return;
+      this.submitting = true;
+      this.flashError = '';
+      this.flashSuccess = '';
+      try {
+        const r = await fetch(`/api/origination/applications/${this.applicationId}/${action}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({ comments: '' }),
+        });
+        const data = await r.json();
+        if (!r.ok) { this.flashError = data.error || 'Action failed.'; return; }
+
+        this.app = data;
+        if (action === 'advance' && data.status === 'APPROVED') {
+          this.flashSuccess = `Application approved. Loan ${data.loan_number || ''} created.`;
+        } else if (action === 'advance') {
+          this.flashSuccess = 'Advanced to next stage.';
+        } else if (action === 'submit') {
+          this.flashSuccess = 'Submitted for review.';
+        } else if (action === 'withdraw') {
+          this.flashSuccess = 'Application withdrawn.';
+        } else if (action === 'return_to_applicant') {
+          this.flashSuccess = 'Returned to applicant.';
+        }
+        setTimeout(() => this.flashSuccess = '', 5000);
+      } catch (e) {
+        this.flashError = 'Network error.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    promptReject() { this.rejectReason = ''; this.showRejectModal = true; },
+
+    async confirmReject() {
+      this.submitting = true;
+      try {
+        const r = await fetch(`/api/origination/applications/${this.applicationId}/reject/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.getToken() },
+          body: JSON.stringify({ comments: this.rejectReason }),
+        });
+        const data = await r.json();
+        if (!r.ok) { this.flashError = data.error || 'Rejection failed.'; return; }
+        this.app = data;
+        this.showRejectModal = false;
+        this.flashSuccess = 'Application rejected.';
+        setTimeout(() => this.flashSuccess = '', 5000);
+      } catch (e) {
+        this.flashError = 'Network error.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    promptDisburse() {
+      this.disburseChannel = 'BANK';
+      this.disburseReference = '';
+      this.disburseDate = new Date().toISOString().slice(0, 10);
+      this.flashError = '';
+      this.showDisburseModal = true;
+    },
+
+    async confirmDisburse() {
+      this.submitting = true;
+      this.flashError = '';
+      try {
+        const r = await fetch(`/api/origination/applications/${this.applicationId}/disburse/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.getToken() },
+          body: JSON.stringify({
+            channel: this.disburseChannel,
+            reference: this.disburseReference,
+            date: this.disburseDate,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) { this.flashError = data.error || 'Disbursement failed.'; return; }
+
+        this.app = data;
+        this.showDisburseModal = false;
+        this.flashSuccess = `Disbursed successfully. Loan ${data.loan_number || ''} is now active.`;
+        setTimeout(() => this.flashSuccess = '', 6000);
+      } catch (e) {
+        this.flashError = 'Network error.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    // ⬇ FIXED: full figures with 2 decimals (no more K25.0K)
+    fmtMoney(v) {
+      const n = Number(v || 0);
+      return 'K ' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    // ⬇ FIXED: full figures with 2 decimals
+    fmtNum(v) {
+      return Number(v || 0).toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+
+    prettyStatus(s) {
+      return {
+        DRAFT: 'Draft', SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under Review',
+        APPROVED: 'Approved', REJECTED: 'Rejected', RETURNED: 'Returned',
+        WITHDRAWN: 'Withdrawn', DISBURSED: 'Disbursed',
+      }[s] || s;
+    },
+    statusPill(s) {
+      return {
+        DRAFT: 'pill-neutral', SUBMITTED: 'pill-info', UNDER_REVIEW: 'pill-warning',
+        APPROVED: 'pill-success', REJECTED: 'pill-danger', RETURNED: 'pill-warning',
+        WITHDRAWN: 'pill-neutral', DISBURSED: 'pill-success',
+      }[s] || 'pill-neutral';
+    },
+    prettyPurpose(p) {
+      return {
+        BUSINESS_CAPITAL: 'Business Capital', EQUIPMENT: 'Equipment',
+        INVENTORY: 'Inventory', AGRICULTURE: 'Agriculture',
+        EDUCATION: 'Education', MEDICAL: 'Medical',
+        EMERGENCY: 'Emergency', OTHER: 'Other',
+      }[p] || p;
+    },
+    prettyAction(a) {
+      return {
+        SUBMITTED: 'Submitted for review', MOVED: 'Advanced stage',
+        APPROVED: 'Approved', REJECTED: 'Rejected',
+        RETURNED: 'Returned', WITHDRAWN: 'Withdrawn',
+        DISBURSED: 'Disbursed',
+      }[a] || a;
+    },
+    actionColor(a) {
+      return {
+        SUBMITTED: '#0284C7', MOVED: '#CA8A04',
+        APPROVED: '#16A34A', REJECTED: '#DC2626',
+        RETURNED: '#EA580C', WITHDRAWN: '#71717A',
+        DISBURSED: '#16A34A',
+      }[a] || '#71717A';
+    },
+    reviewPill(rec) {
+      return {
+        APPROVE: 'pill-success', REJECT: 'pill-danger',
+        RETURN: 'pill-warning', FLAG: 'pill-info',
+      }[rec] || 'pill-neutral';
+    },
+
+    stageState(stage) {
+      if (!this.app?.current_stage) {
+        if (this.app?.status === 'APPROVED' || this.app?.status === 'DISBURSED') return 'complete';
+        return 'pending';
+      }
+      if (stage.order < this.app.current_stage.order) return 'complete';
+      if (stage.id === this.app.current_stage.id)     return 'current';
+      return 'pending';
+    },
+    stageStateClass(stage) {
+      const s = this.stageState(stage);
+      if (s === 'complete') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+      if (s === 'current')  return 'bg-[var(--ink)] text-white';
+      return 'bg-[var(--cream)] text-[var(--ink-3)] border border-[var(--border)]';
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('applicationDetail', applicationDetail);
+});
+</script>
+
+{% endblock %}

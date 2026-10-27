@@ -1,0 +1,27 @@
+# ============================================================
+# Dev override: use with:
+#     docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# ============================================================
+services:
+
+  web:
+    build:
+      target: runtime
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    environment:
+      DJANGO_ENV: dev
+      DEBUG: "True"
+    volumes:
+      - .:/app
+      - ../frontend:/frontend
+      - media_files:/app/media
+    ports:
+      - "8000:8000"
+
+  nginx:
+    profiles:
+      - donotstart

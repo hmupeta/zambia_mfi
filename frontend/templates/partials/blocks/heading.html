@@ -1,0 +1,12 @@
+<section class="py-16 bg-{% if block.background == 'cream' %}[var(--cream)]{% elif block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %}">
+  <div class="max-w-[900px] mx-auto px-6 text-center">
+    <h2 class="font-display text-[42px] sm:text-[56px] leading-[1.05] text-{% if block.background == 'dark' %}white{% else %}[var(--ink)]{% endif %}">
+      {{ block.title }}
+    </h2>
+    {% if block.subtitle %}
+    <p class="mt-5 text-[17px] text-{% if block.background == 'dark' %}[#A1A1AA]{% else %}[var(--ink-2)]{% endif %} leading-[1.7] max-w-2xl mx-auto">
+      {{ block.subtitle }}
+    </p>
+    {% endif %}
+  </div>
+</section>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - Nimbus Microfinance Platform</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Google Fonts for a Wikipedia-like Serif look -->
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc;
+        }
+        h1, h2, h3, h4 { font-family: 'Merriweather', serif; }
+        .wiki-content p { margin-bottom: 1rem; line-height: 1.8; }
+        .wiki-content ul { list-style-type: disc; margin-bottom: 1rem; }
+        .wiki-content ol { list-style-type: decimal; margin-bottom: 1rem; }
+        .wiki-content li { margin-bottom: 0.5rem; line-height: 1.6; }
+        .toc-link { transition: color 0.2s; }
+        .toc-link:hover { color: #1d4ed8; text-decoration: underline; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.875rem; }
+        th, td { border: 1px solid #e5e7eb; padding: 0.75rem; text-align: left; }
+        th { background-color: #f3f4f6; font-weight: 600; }
+
+        /* Modern Mesh Background */
+        .mesh-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1;
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,0.03) 0px, transparent 50%),
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.03) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.03) 0px, transparent 50%);
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+    <!-- Ambient Background Orbs -->
+    <div class="mesh-bg">
+        <div class="blob bg-blue-200 w-[500px] h-[500px] top-[-100px] left-[-100px]"></div>
+        <div class="blob bg-amber-100 w-[400px] h-[400px] top-[20%] right-[-50px]"></div>
+        <div class="blob bg-emerald-100 w-[600px] h-[600px] bottom-[-200px] left-[20%]"></div>
+    </div>
+
+    <!-- Top Navbar (Glassmorphism) -->
+    <nav class="bg-white/70 backdrop-blur-xl border-b border-gray-200/60 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <div class="flex items-center gap-4">
+            <a href="/" class="text-xl font-black text-gray-900 tracking-tight">Nimbus<span class="text-amber-600">MFI</span></a>
+            <span class="text-gray-300">|</span>
+            <span class="text-sm font-medium text-gray-500 uppercase tracking-widest">Platform Docs</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="/api/docs/" target="_blank" class="text-sm font-medium text-gray-600 hover:text-gray-900 transition">API Reference</a>
+            <a href="/" class="text-sm font-medium text-white bg-amber-600 px-4 py-2 rounded-lg hover:bg-amber-700 transition shadow-sm">Back to App</a>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
+
+        <!-- Left Sidebar (Glassmorphism) -->
+        <aside class="w-full lg:w-72 shrink-0">
+            <div class="sticky top-24 bg-white/70 backdrop-blur-xl border border-gray-200/60 rounded-xl p-5 shadow-sm max-h-[calc(100vh-8rem)] overflow-y-auto">
+                <h3 class="font-bold text-gray-900 mb-4 uppercase tracking-wider text-xs border-b border-gray-200/60 pb-2">Contents</h3>
+                <ul class="space-y-2 text-sm text-gray-700 font-medium">
+                    <li><a href="#overview" class="toc-link">1. Executive Overview</a></li>
+                    <li><a href="#architecture" class="toc-link">2. System Architecture</a></li>
+                    <li><a href="#journeys" class="toc-link">3. User Journeys & Roles</a></li>
+                    <li class="pl-4 text-xs text-gray-500"><a href="#journey-admin" class="toc-link">3.1 HQ Administrator</a></li>
+                    <li class="pl-4 text-xs text-gray-500"><a href="#journey-officer" class="toc-link">3.2 Loan Officer</a></li>
+                    <li class="pl-4 text-xs text-gray-500"><a href="#journey-manager" class="toc-link">3.3 Branch Manager</a></li>
+                    <li class="pl-4 text-xs text-gray-500"><a href="#journey-customer" class="toc-link">3.4 The Customer</a></li>
+                    <li><a href="#lifecycle" class="toc-link">4. The Loan Lifecycle</a></li>
+                    <li><a href="#accounting" class="toc-link">5. Accounting Subsystem</a></li>
+                    <li><a href="#momo" class="toc-link">6. Mobile Money Integration</a></li>
+                    <li><a href="#reports" class="toc-link">7. Reporting Matrix</a></li>
+                    <li><a href="#security" class="toc-link">8. Security & Compliance</a></li>
+                    <li><a href="#glossary" class="toc-link">9. Glossary of Terms</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content Area (Glassmorphism) -->
+        <main class="flex-1 bg-white/80 backdrop-blur-xl border border-gray-200/60 rounded-xl p-8 sm:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+            
+            <div class="mb-10 border-b border-gray-200/80 pb-8">
+                <h1 class="text-4xl sm:text-5xl font-black text-gray-900 mb-4 leading-tight">Nimbus Microfinance Platform</h1>
+                <p class="text-lg text-gray-600 leading-relaxed font-serif italic">
+                    A comprehensive, enterprise-grade digital infrastructure designed for Microfinance Institutions (MFIs) operating in Zambia.
+                </p>
+                <div class="mt-4 flex gap-4 text-xs text-gray-500 uppercase tracking-widest font-bold">
+                    <span>Version 1.0</span>
+                    <span>•</span>
+                    <span>Last Updated: October 2026</span>
+                </div>
+            </div>
+
+            <div class="wiki-content text-gray-800">
+
+                <!-- 1. Overview -->
+                <section id="overview" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">1. Executive Overview</h2>
+                    <p>
+                        Nimbus is a multi-tenant, cloud-native core banking and loan management system tailored for the Zambian microfinance sector. It addresses the critical challenge of financial inclusion by providing a paperless, mobile-first ecosystem for loan origination, credit scoring, and mobile money collections. 
+                    </p>
+                    <p>
+                        The platform is designed to operate efficiently in low-connectivity environments (via the Field App) while providing HQ Administrators with real-time, Bank of Zambia (BoZ) compliant financial reporting and audit capabilities.
+                    </p>
+                </section>
+
+                <!-- 2. Architecture -->
+                <section id="architecture" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">2. System Architecture</h2>
+                    <p>The Nimbus ecosystem is composed of four primary, fully integrated components:</p>
+                    <ul class="pl-6 space-y-3">
+                        <li><strong>The Web Portal (Django + HTMX):</strong> The central command center. It is secured by Role-Based Access Control (RBAC) and is used by internal staff to manage operations, review applications, and generate reports.</li>
+                        <li><strong>The Field App (Flutter):</strong> An offline-first mobile application for Loan Officers. It uses local database storage (Hive) to capture KYC documents (NRC photos) and loan applications in the field, syncing with the server when a connection is available.</li>
+                        <li><strong>The Customer App (Flutter):</strong> A self-service mobile app for borrowers. Features include biometric login, loan application submission, and push USSD prompts for mobile money repayments.</li>
+                        <li><strong>The Customer Web Portal:</strong> A responsive web interface offering the same self-service capabilities as the mobile app for desktop users.</li>
+                    </ul>
+                </section>
+
+                <!-- 3. User Journeys -->
+                <section id="journeys" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">3. User Journeys & Roles</h2>
+                    <p class="mb-6">The platform enforces strict Segregation of Duties (Four-Eyes Principle) at the database level to prevent internal fraud.</p>
+                    
+                    <h3 id="journey-admin" class="text-xl font-bold text-gray-800 mt-6 mb-3">3.1 The HQ Administrator (The Architect)</h3>
+                    <p>Configures the structural rules of the MFI.</p>
+                    <ol class="pl-6 space-y-2 mb-6">
+                        <li><strong>Hierarchy Setup:</strong> Creates branches (e.g., "Ndola Branch") and provisions user accounts with specific roles (Manager, Officer, Teller).</li>
+                        <li><strong>Product Configuration:</strong> Defines loan products (e.g., "SME Loan" with a 25% flat interest rate, 12-month max tenure, and specific GL mapping).</li>
+                        <li><strong>Workflow Configuration:</strong> Establishes multi-stage approval pipelines (e.g., Officer -> Manager -> HQ Admin sign-off for loans > K50,000).</li>
+                        <li><strong>System Settings:</strong> Configures SMS/WhatsApp notification templates, global grace periods, and mobile money API credentials.</li>
+                    </ol>
+
+                    <h3 id="journey-officer" class="text-xl font-bold text-gray-800 mt-6 mb-3">3.2 The Loan Officer (The Field Agent)</h3>
+                    <p>Responsible for client acquisition and initial credit assessment.</p>
+                    <ol class="pl-6 space-y-2 mb-6">
+                        <li><strong>Client Onboarding:</strong> Uses the Field App to capture the client's full name, NRC number, and phone number. Takes high-resolution photos of the client's face and their physical NRC document.</li>
+                        <li><strong>Appraisal:</strong> Inputs the client's monthly income, expenses, existing debts, and net worth to calculate the Debt-to-Income (DTI) ratio.</li>
+                        <li><strong>Submission:</strong> Submits the application, which is queued for the Branch Manager.</li>
+                    </ol>
+
+                    <h3 id="journey-manager" class="text-xl font-bold text-gray-800 mt-6 mb-3">3.3 The Branch Manager (The Approver)</h3>
+                    <p>Responsible for credit risk and disbursement authorization.</p>
+                    <ol class="pl-6 space-y-2 mb-6">
+                        <li><strong>Credit Review:</strong> Reviews the uploaded KYC documents and the officer's appraisal. Checks the auto-generated credit score (Grade A-D).</li>
+                        <li><strong>Approval:</strong> Approves the loan. The system instantly generates the Loan record and the repayment schedule (installments).</li>
+                        <li><strong>Disbursement:</strong> Initiates the payout. Selects "MTN MoMo" or "Airtel Money". The system triggers a real-time API call to transfer funds from the MFI wallet to the customer's wallet, and automatically posts the required Journal Entries.</li>
+                    </ol>
+
+                    <h3 id="journey-customer" class="text-xl font-bold text-gray-800 mt-6 mb-3">3.4 The Customer (The Borrower)</h3>
+                    <p>Self-service access to credit and repayment.</p>
+                    <ol class="pl-6 space-y-2 mb-6">
+                        <li><strong>Repayment:</strong> Logs into the Customer App, navigates to the active loan, and selects "Make a Payment".</li>
+                        <li><strong>USSD Authorization:</strong> The app sends a Request-to-Pay to the backend, which triggers a USSD prompt (e.g., *150#) on the customer's phone. They enter their PIN to authorize the deduction.</li>
+                        <li><strong>Instant Update:</strong> The app polls the backend and instantly reflects the new loan balance and updated repayment history.</li>
+                    </ol>
+                </section>
+
+                <!-- 4. Loan Lifecycle -->
+                <section id="lifecycle" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">4. The Loan Lifecycle</h2>
+                    <p>Every loan transitions through a strict state machine:</p>
+                    <div class="flex flex-wrap gap-2 mb-4 text-sm font-semibold">
+                        <span class="bg-gray-100 px-3 py-1 rounded">DRAFT</span> <span class="text-gray-400">→</span>
+                        <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded">SUBMITTED</span> <span class="text-gray-400">→</span>
+                        <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded">UNDER REVIEW</span> <span class="text-gray-400">→</span>
+                        <span class="bg-green-100 text-green-800 px-3 py-1 rounded">APPROVED</span> <span class="text-gray-400">→</span>
+                        <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded">DISBURSED</span>
+                    </div>
+                    <ul class="pl-6 space-y-2">
+                        <li><strong>Credit Scoring:</strong> The system runs a proprietary algorithm evaluating Debt-to-Income, Net Worth coverage, and Repayment History to assign a Grade (A, B, C, or D).</li>
+                        <li><strong>Amortization:</strong> Supports Flat Interest and Reducing Balance methods. Installments are generated dynamically based on the client's chosen frequency (Daily, Weekly, Bi-Weekly, Monthly).</li>
+                        <li><strong>Delinquency (DPD):</strong> If a payment is missed, the loan enters a "Days Past Due" state, escalating penalty interest and changing the loan classification (Watch, Substandard, Doubtful, Loss).</li>
+                    </ul>
+                </section>
+
+                <!-- 5. Accounting -->
+                <section id="accounting" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">5. Accounting Subsystem</h2>
+                    <p class="mb-4">Nimbus uses a full <strong>Double-Entry Accounting</strong> engine. Every financial event triggers an automated Journal Entry (JE). There is no manual data entry required for standard operations.</p>
+                    <div class="overflow-x-auto">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Business Event</th>
+                                    <th>Debit (DR)</th>
+                                    <th>Credit (CR)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Loan Disbursement</td>
+                                    <td>1100 - Loans Receivable</td>
+                                    <td>1030 - Mobile Money Float</td>
+                                </tr>
+                                <tr>
+                                    <td>Loan Repayment (Principal)</td>
+                                    <td>1030 - Mobile Money Float</td>
+                                    <td>1100 - Loans Receivable</td>
+                                </tr>
+                                <tr>
+                                    <td>Loan Repayment (Interest)</td>
+                                    <td>1030 - Mobile Money Float</td>
+                                    <td>4000 - Interest Income</td>
+                                </tr>
+                                <tr>
+                                    <td>Late Payment Penalty</td>
+                                    <td>1030 - Mobile Money Float</td>
+                                    <td>4100 - Penalty Income</td>
+                                </tr>
+                                <tr>
+                                    <td>Loan Loss Provision (Monthly)</td>
+                                    <td>5000 - Loan Loss Expense</td>
+                                    <td>1200 - Allowance for Loan Losses</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 6. Mobile Money -->
+                <section id="momo" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">6. Mobile Money Integration</h2>
+                    <p>The platform is deeply integrated with MTN MoMo and Airtel Money APIs, supporting two distinct transaction types per branch:</p>
+                    <ul class="pl-6 space-y-3">
+                        <li><strong>Collections (Inbound):</strong> Uses the "Request to Pay" API. When a repayment is due, the system sends a request to the customer's wallet, prompting them for their PIN.</li>
+                        <li><strong>Disbursements (Outbound):</strong> Uses the "Transfer" API. When a manager approves a loan, the funds are instantly pushed to the customer's wallet without the customer needing to do anything.</li>
+                        <li><strong>Environment Management:</strong> The system supports both Sandbox and Production environments, storing encrypted API keys, Client IDs, and Subscription Keys securely per branch.</li>
+                    </ul>
+                </section>
+
+                <!-- 7. Reports -->
+                <section id="reports" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">7. Reporting Matrix</h2>
+                    <p class="mb-4">Reports are categorized by stakeholder and regulatory requirement.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans text-sm">
+                        <div class="border border-gray-200/60 rounded-xl p-5 bg-white/50 shadow-sm">
+                            <h4 class="font-bold text-gray-900 mb-2">Financial Statements</h4>
+                            <ul class="list-disc pl-5 text-gray-700">
+                                <li><strong>Trial Balance:</strong> Ensures all debits equal credits.</li>
+                                <li><strong>Income Statement:</strong> Tracks profitability (Interest - Expenses).</li>
+                                <li><strong>Balance Sheet:</strong> Snapshot of Assets, Liabilities, and Equity.</li>
+                            </ul>
+                        </div>
+                        <div class="border border-gray-200/60 rounded-xl p-5 bg-white/50 shadow-sm">
+                            <h4 class="font-bold text-gray-900 mb-2">Bank of Zambia (BoZ) Returns</h4>
+                            <ul class="list-disc pl-5 text-gray-700">
+                                <li><strong>Portfolio at Risk (PAR):</strong> Measures overdue loans (PAR 30, PAR 90).</li>
+                                <li><strong>Non-Performing Loans (NPL):</strong> Loans 90+ days overdue.</li>
+                                <li><strong>Loan Loss Provision:</strong> Reserves held for bad debt.</li>
+                            </ul>
+                        </div>
+                        <div class="border border-gray-200/60 rounded-xl p-5 bg-white/50 shadow-sm">
+                            <h4 class="font-bold text-gray-900 mb-2">Operational Reports</h4>
+                            <ul class="list-disc pl-5 text-gray-700">
+                                <li><strong>Daily Collections:</strong> Cash and MoMo received per branch.</li>
+                                <li><strong>Aging Report:</strong> Buckets loans by delinquency (1-30, 31-60 days).</li>
+                                <li><strong>Disbursement Log:</strong> Record of all outgoing funds.</li>
+                            </ul>
+                        </div>
+                        <div class="border border-gray-200/60 rounded-xl p-5 bg-white/50 shadow-sm">
+                            <h4 class="font-bold text-gray-900 mb-2">Audit & Security</h4>
+                            <ul class="list-disc pl-5 text-gray-700">
+                                <li><strong>Audit Trail:</strong> Immutable log of all system actions.</li>
+                                <li><strong>Bank Reconciliation:</strong> Matches system ledger to bank statements.</li>
+                                <li><strong>MoMo Float Report:</strong> Tracks real-time wallet balances.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. Security -->
+                <section id="security" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">8. Security & Compliance</h2>
+                    <ul class="pl-6 space-y-3">
+                        <li><strong>Data Isolation (Multi-Tenancy):</strong> The database is logically partitioned. A Branch Manager in Lusaka cannot access client data or loans belonging to the Ndola Branch.</li>
+                        <li><strong>Credential Encryption:</strong> All third-party API credentials (MTN Subscription Keys, API Secrets) are encrypted at rest using Fernet symmetric encryption. They are never exposed in plain text in the database.</li>
+                        <li><strong>Segregation of Duties:</strong> Hard-coded business rules prevent the same user from creating a loan, approving it, and disbursing it. System administrators cannot bypass this.</li>
+                        <li><strong>CSRF & XSS Protection:</strong> All web forms and API endpoints are protected against Cross-Site Request Forgery (CSRF) and Cross-Site Scripting (XSS).</li>
+                    </ul>
+                </section>
+
+                <!-- 9. Glossary -->
+                <section id="glossary" class="mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-200/80 pb-2">9. Glossary of Terms</h2>
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="font-bold text-gray-900">KYC (Know Your Customer)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">The mandatory process of identifying and verifying a client's identity (via NRC and photograph) before providing financial services.</dd>
+                        </div>
+                        <div>
+                            <dt class="font-bold text-gray-900">NRC (National Registration Card)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">The primary identity document for Zambian citizens, required for all loan applications.</dd>
+                        </div>
+                        <div>
+                            <dt class="font-bold text-gray-900">DPD (Days Past Due)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">The number of days a loan installment is overdue. Used to classify loans and calculate penalties.</dd>
+                        </div>
+                        <div>
+                            <dt class="font-bold text-gray-900">PAR (Portfolio at Risk)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">A percentage representing the portion of the loan portfolio that is overdue. PAR 30 is the industry standard for measuring risk.</dd>
+                        </div>
+                        <div>
+                            <dt class="font-bold text-gray-900">MoMo (Mobile Money)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">Digital wallet services provided by telecom operators (MTN, Airtel) used for disbursing loans and collecting repayments.</dd>
+                        </div>
+                        <div>
+                            <dt class="font-bold text-gray-900">GL (General Ledger)</dt>
+                            <dd class="text-gray-700 text-sm mt-1">The master record of all financial transactions, ensuring the accounting equation (Assets = Liabilities + Equity) remains balanced.</dd>
+                        </div>
+                    </dl>
+                </section>
+
+            </div>
+
+            <!-- Footer Note -->
+            <div class="mt-16 pt-8 border-t border-gray-200/80 text-sm text-gray-500 italic font-sans flex justify-between">
+                <span>Nimbus Microfinance Platform Documentation</span>
+                <span>Confidential & Proprietary</span>
+            </div>
+        </main>
+
+    </div>
+</body>
+</html>

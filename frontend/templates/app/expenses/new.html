@@ -1,0 +1,227 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}New Expense — Nimbus{% endblock %}
+{% block page_title %}New Expense{% endblock %}
+
+{% block content %}
+<div x-data="newExpensePage" x-init="init()" x-cloak class="max-w-3xl mx-auto">
+    {% include "partials/breadcrumbs.html" %}
+
+  <a href="/app/expenses/" class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium inline-flex items-center gap-1 mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to expenses
+  </a>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <form @submit.prevent="save()" class="card p-6 space-y-5">
+
+    <h2 class="font-display text-[22px] tracking-tight mb-2">Expense Details</h2>
+
+    <!-- Category + Branch -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div>
+        <label class="label">Category <span class="text-red-500">*</span></label>
+        <select x-model="form.category" required class="input">
+          <option value="">— Select category —</option>
+          <template x-for="c in categories" :key="c.id">
+            <option :value="c.id" x-text="c.code + ' — ' + c.name"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="label">Branch <span class="text-red-500">*</span></label>
+        <select x-model="form.branch" required class="input">
+          <option value="">— Select branch —</option>
+          <template x-for="b in branches" :key="b.id">
+            <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+
+    <!-- Amount + Date -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div>
+        <label class="label">Amount (ZMW) <span class="text-red-500">*</span></label>
+        <input type="number" step="0.01" min="0.01" x-model="form.amount" required class="input font-mono" />
+      </div>
+      <div>
+        <label class="label">Expense Date <span class="text-red-500">*</span></label>
+        <input type="date" x-model="form.expense_date" required class="input" />
+      </div>
+    </div>
+
+    <!-- Payee -->
+    <div>
+      <label class="label">Payee <span class="text-red-500">*</span></label>
+      <input type="text" x-model="form.payee" required
+             placeholder="Who received the payment?"
+             class="input" />
+    </div>
+
+    <!-- Description -->
+    <div>
+      <label class="label">Description <span class="text-red-500">*</span></label>
+      <textarea x-model="form.description" required rows="3"
+                placeholder="What was this expense for?"
+                class="input"></textarea>
+    </div>
+
+    <!-- Payment method + Reference -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div>
+        <label class="label">Payment Method <span class="text-red-500">*</span></label>
+        <select x-model="form.payment_method" required class="input">
+          <option value="CASH">Cash</option>
+          <option value="MTN_MOMO">MTN Mobile Money</option>
+          <option value="AIRTEL_MONEY">Airtel Money</option>
+          <option value="BANK">Bank</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Reference <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+        <input type="text" x-model="form.reference"
+               placeholder="Invoice #, receipt #, etc."
+               class="input" />
+      </div>
+    </div>
+
+    <!-- Receipt -->
+    <div>
+      <label class="label">Receipt <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+      <input type="file" @change="onFileChange($event)" class="input !py-2" accept="image/*,application/pdf" />
+      <p class="text-[11px] text-[var(--ink-3)] mt-1" x-show="form.receipt">Selected: <span x-text="form.receipt?.name"></span></p>
+    </div>
+
+    <!-- Notes -->
+    <div>
+      <label class="label">Notes <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+      <textarea x-model="form.notes" rows="2" class="input"
+                placeholder="Internal notes for reviewers"></textarea>
+    </div>
+
+    <!-- Submit -->
+    <div class="flex items-center gap-3 pt-4 border-t border-[var(--border)]">
+      <button type="submit" :disabled="saving"
+              class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+        <span x-text="saving ? 'Creating…' : 'Create Expense'"></span>
+      </button>
+      <a href="/app/expenses/" class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+        Cancel
+      </a>
+      <div class="flex-1"></div>
+      <p class="text-[12px] text-[var(--ink-3)]">The expense will be saved as <strong>DRAFT</strong>. You can submit it for approval from the detail page.</p>
+    </div>
+  </form>
+</div>
+
+<script>
+function newExpensePage() {
+  const API = '/api/expenses';
+
+  return {
+    categories: [],
+    branches: [],
+    saving: false,
+    error: '',
+    form: {
+      category: '',
+      branch: '',
+      amount: '',
+      expense_date: new Date().toISOString().slice(0, 10),
+      payee: '',
+      description: '',
+      payment_method: 'CASH',
+      reference: '',
+      notes: '',
+      receipt: null,
+    },
+
+    async init() {
+      await Promise.all([this.loadCategories(), this.loadBranches()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    authHeaders(extra = {}) {
+      return { 'Authorization': 'Bearer ' + this.getToken(), ...extra };
+    },
+
+    async loadCategories() {
+      const r = await fetch(`${API}/categories/?is_active=true&page_size=100`, { headers: this.authHeaders() });
+      if (r.ok) {
+        const data = await r.json();
+        this.categories = data.results || data;
+      }
+    },
+
+    async loadBranches() {
+        const r = await fetch('/api/auth/branches/?page_size=100', { headers: this.authHeaders() });      
+        if (r.ok) {
+        const data = await r.json();
+        this.branches = data.results || data;
+      }
+    },
+
+    onFileChange(e) {
+      this.form.receipt = e.target.files[0] || null;
+    },
+
+    async save() {
+      this.saving = true;
+      this.error = '';
+      try {
+        // If a receipt was chosen, send as multipart; otherwise JSON
+        let body, headers;
+        if (this.form.receipt) {
+          const fd = new FormData();
+          Object.entries(this.form).forEach(([k, v]) => {
+            if (v !== null && v !== undefined && v !== '') fd.append(k, v);
+          });
+          body = fd;
+          headers = this.authHeaders();
+        } else {
+          const payload = { ...this.form };
+          delete payload.receipt;
+          body = JSON.stringify(payload);
+          headers = this.authHeaders({ 'Content-Type': 'application/json' });
+        }
+
+        const r = await fetch(`${API}/`, { method: 'POST', headers, body });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || JSON.stringify(err) || 'Failed to create expense');
+        }
+        const created = await r.json();
+        window.location.href = `/app/expenses/${created.id}/`;
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+    async loadBranches() {
+      const r = await fetch('/api/auth/branches/?page_size=100', { headers: this.authHeaders() });
+      if (r.ok) {
+        const data = await r.json();
+        this.branches = data.results || data;
+      } else {
+        console.error('Failed to load branches:', r.status, r.statusText);
+        this.error = `Could not load branches (HTTP ${r.status}).`;
+      }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('newExpensePage', newExpensePage);
+});
+</script>
+{% endblock %}

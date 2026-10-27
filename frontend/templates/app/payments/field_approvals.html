@@ -1,0 +1,167 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Field Sync Approvals — Nimbus{% endblock %}
+{% block page_title %}Field Approvals{% endblock %}
+
+{% block content %}
+<div x-data="fieldApprovals()" x-init="init()" class="max-w-5xl mx-auto">
+
+  <div class="mb-6 flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <h2 class="font-display text-[28px] sm:text-[32px] leading-tight tracking-tight">Field Sync Approvals</h2>
+      <p class="mt-1 text-[14px] text-[var(--ink-2)]">
+        Review payments recorded by Loan Officers in the field. Approving will post to the GL and update loan balances.
+      </p>
+    </div>
+    <button @click="load()" class="btn-secondary !w-auto !py-2 !px-4 !text-[13px]">
+      Refresh Queue
+    </button>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <!-- Loading State -->
+  <div x-show="loading" class="card p-6 space-y-3">
+    <template x-for="i in 4" :key="i">
+      <div class="h-10 rounded bg-[var(--border)] animate-pulse"></div>
+    </template>
+  </div>
+
+  <!-- Table -->
+  <div x-show="!loading" x-cloak class="card overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Date</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Officer</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Loan / Client</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Amount</th>
+          <th class="text-center px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Status</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="c in collections" :key="c.id">
+          <tr class="border-t border-[var(--border)] hover:bg-[var(--cream)]/50 transition">
+            <td class="px-5 py-3 text-[12.5px] font-mono text-[var(--ink-2)]" x-text="fmtDate(c.created_at)"></td>
+            <td class="px-5 py-3 text-[13px] font-medium" x-text="c.recorded_by_name"></td>
+            <td class="px-5 py-3">
+              <div class="text-[13px] font-mono font-medium" x-text="c.loan_number"></div>
+              <div class="text-[12px] text-[var(--ink-3)]" x-text="c.client_name"></div>
+            </td>
+            <td class="px-5 py-3 text-right font-mono font-bold text-[13.5px]" x-text="fmtMoney(c.amount)"></td>
+            <td class="px-5 py-3 text-center">
+              <span class="pill" :class="statusPill(c.status)" x-text="c.status"></span>
+            </td>
+            <td class="px-5 py-3 text-right">
+              <template x-if="c.status === 'PENDING'">
+                <div class="flex justify-end gap-3">
+                  <button @click="reject(c)" :disabled="processing === c.id" class="text-[12.5px] font-medium text-red-600 hover:underline disabled:opacity-50">Reject</button>
+                  <button @click="approve(c)" :disabled="processing === c.id" class="text-[12.5px] font-medium text-emerald-600 hover:underline disabled:opacity-50">
+                    <span x-text="processing === c.id ? 'Approving...' : 'Approve'"></span>
+                  </button>
+                </div>
+              </template>
+              <template x-if="c.status !== 'PENDING'">
+                <span class="text-[12px] text-[var(--ink-3)]" x-text="c.reviewed_by_name ? 'By ' + c.reviewed_by_name : '—'"></span>
+              </template>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="collections.length === 0">
+          <td colspan="6" class="p-12 text-center text-[13.5px] text-[var(--ink-3)]">
+            🎉 No pending field collections to review.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+function fieldApprovals() {
+  return {
+    collections: [],
+    loading: true,
+    error: '',
+    processing: null,
+
+    async init() {
+      await this.load();
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async load() {
+      this.loading = true;
+      this.error = '';
+      try {
+        const r = await fetch('/api/payments/field-collections/?page_size=100', { 
+          headers: { 'Authorization': 'Bearer ' + this.getToken() } 
+        });
+        if (!r.ok) throw new Error('Failed to load collections');
+        const data = await r.json();
+        this.collections = data.results || data;
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async approve(c) {
+      if(!confirm(`Are you sure you want to approve K ${c.amount} for loan ${c.loan_number}?\n\nThis will post to the GL and update the loan balance.`)) return;
+      
+      this.processing = c.id;
+      try {
+        const r = await fetch(`/api/payments/field-collections/${c.id}/approve/`, {
+          method: 'POST', 
+          headers: { 'Authorization': 'Bearer ' + this.getToken() }
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Approval failed');
+        
+        // Mark as approved in UI and reload list to get latest data
+        await this.load();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        this.processing = null;
+      }
+    },
+
+    async reject(c) {
+      if(!confirm('Are you sure you want to reject this collection?')) return;
+      
+      this.processing = c.id;
+      try {
+        const r = await fetch(`/api/payments/field-collections/${c.id}/reject/`, {
+          method: 'POST', 
+          headers: { 'Authorization': 'Bearer ' + this.getToken() }
+        });
+        if (!r.ok) throw new Error('Rejection failed');
+        await this.load();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        this.processing = null;
+      }
+    },
+
+    fmtMoney(v) { 
+      return 'K ' + Number(v || 0).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
+    },
+    fmtDate(iso) { 
+      return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); 
+    },
+    statusPill(s) { 
+      return { PENDING: 'pill-warning', APPROVED: 'pill-success', REJECTED: 'pill-danger' }[s] || 'pill-neutral'; 
+    }
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('fieldApprovals', fieldApprovals));
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}{{ page.meta_title|default:page.title }}{% endblock %}
+
+{% block content %}
+<header class="bg-[var(--cream)] border-b border-[var(--border)]">
+  <div class="max-w-[900px] mx-auto px-6 pt-20 pb-12">
+    <h1 class="font-display text-[42px] sm:text-[56px] text-[var(--ink)]">{{ page.title }}</h1>
+    <p class="mt-3 text-[13px] text-[var(--ink-3)] font-mono uppercase tracking-wider">Last updated {{ page.updated_at|date:"F j, Y" }}</p>
+  </div>
+</header>
+
+<article class="py-16 bg-white">
+  <div class="max-w-[760px] mx-auto px-6 prose-nimbus text-[var(--ink-2)]">
+    {% for block in blocks %}{% render_block block %}{% endfor %}
+  </div>
+</article>
+{% endblock %}

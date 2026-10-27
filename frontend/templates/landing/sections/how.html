@@ -1,0 +1,24 @@
+<section {% if section.anchor %}id="{{ section.anchor }}"{% endif %} class="py-28 lg:py-32 bg-[var(--cream)] scroll-mt-20">
+  <div class="max-w-[1280px] mx-auto px-6 lg:px-8">
+    <div class="max-w-3xl mb-20 reveal">
+      {% if section.eyebrow %}<div class="eyebrow mb-5">{{ section.eyebrow }}</div>{% endif %}
+      <h2 class="font-display text-[42px] sm:text-[56px] lg:text-[64px] leading-[1.02] text-[var(--ink)]">
+        {{ section.title }}
+      </h2>
+    </div>
+
+    <div class="grid md:grid-cols-{{ section.visible_items|length|default:3 }} gap-12 md:gap-8">
+      {% for item in section.visible_items %}
+      <div class="reveal reveal-d{{ forloop.counter }} relative">
+        <!-- Number -->
+        <div class="flex items-baseline gap-4 mb-6">
+          <span class="font-display text-[80px] leading-none text-[var(--accent)]">0{{ forloop.counter }}</span>
+          <div class="flex-1 h-px bg-[var(--border)] mt-6 hidden md:block"></div>
+        </div>
+        <h3 class="text-[22px] font-semibold text-[var(--ink)] mb-3 tracking-tight">{{ item.title }}</h3>
+        <p class="text-[15px] text-[var(--ink-2)] leading-[1.7]">{{ item.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

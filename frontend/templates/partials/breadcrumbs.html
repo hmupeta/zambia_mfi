@@ -1,0 +1,26 @@
+<nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5 flex-wrap"
+     aria-label="Breadcrumb">
+  <a href="/app/dashboard/"
+     class="hover:text-[var(--ink)] transition inline-flex items-center gap-1.5 flex-shrink-0">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+    </svg>
+    Dashboard
+  </a>
+
+  {% for crumb in breadcrumbs %}
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)] flex-shrink-0"
+         fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+
+    {% if forloop.last %}
+      <span class="text-[var(--ink)] font-medium truncate max-w-[320px]"
+            {% if x_binding %}x-text="{{ x_binding }}"{% endif %}>{{ crumb.label }}</span>
+    {% elif crumb.href %}
+      <a href="{{ crumb.href }}" class="hover:text-[var(--ink)] transition">{{ crumb.label }}</a>
+    {% else %}
+      <span>{{ crumb.label }}</span>
+    {% endif %}
+  {% endfor %}
+</nav>

@@ -1,0 +1,388 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}{% if mode == 'create' %}New Loan Product{% else %}Edit Loan Product{% endif %} — Nimbus{% endblock %}
+{% block page_title %}{% if mode == 'create' %}New Loan Product{% else %}Edit Loan Product{% endif %}{% endblock %}
+
+{% block content %}
+<div x-data="loanProductForm('{{ mode }}', '{{ product_id }}')" x-init="init()" class="max-w-4xl mx-auto">
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <a href="/app/loans/products/"
+     class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium inline-flex items-center gap-1 mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    All loan products
+  </a>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="loading" class="card p-6">
+    <div class="h-6 w-48 rounded bg-[var(--border)] animate-pulse mb-4"></div>
+    <div class="h-40 rounded bg-[var(--border)] animate-pulse"></div>
+  </div>
+
+  <form x-show="!loading" x-cloak @submit.prevent="save()" class="card p-6 space-y-8">
+
+    <!-- Identity -->
+    <section>
+      <h2 class="font-display text-[20px] tracking-tight mb-1">Identity</h2>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">Product name and category.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="label">Code <span class="text-red-500">*</span></label>
+          <input type="text" x-model="form.code" required maxlength="20"
+                 placeholder="e.g. AGR" class="input font-mono uppercase" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">Unique per organization.</p>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Name <span class="text-red-500">*</span></label>
+          <input type="text" x-model="form.name" required maxlength="100"
+                 placeholder="e.g. Agricultural Loan" class="input" />
+        </div>
+        <div class="sm:col-span-3">
+          <label class="label">Description</label>
+          <textarea x-model="form.description" rows="2" class="input"
+                    placeholder="What this product is for (optional)"></textarea>
+        </div>
+        <div>
+          <label class="label">Category</label>
+          <select x-model="form.category" class="input">
+            <option value="AGRICULTURAL">Agricultural</option>
+            <option value="BUSINESS">Business</option>
+            <option value="EMERGENCY">Emergency</option>
+            <option value="SALARY">Salary-based</option>
+            <option value="GROUP">Group loan</option>
+            <option value="CONSUMER">Consumer</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Amount & Tenure -->
+    <section class="pt-6 border-t border-[var(--border)]">
+      <h2 class="font-display text-[20px] tracking-tight mb-1">Amount & Tenure</h2>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">Permitted ranges. Applications outside these bounds are rejected.</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-5">
+        <div>
+          <label class="label">Min amount <span class="text-red-500">*</span></label>
+          <input type="number" step="0.01" min="0" x-model="form.min_amount" required class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Max amount <span class="text-red-500">*</span></label>
+          <input type="number" step="0.01" min="0" x-model="form.max_amount" required class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Min tenure (mo) <span class="text-red-500">*</span></label>
+          <input type="number" min="1" x-model="form.min_tenure_months" required class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Max tenure (mo) <span class="text-red-500">*</span></label>
+          <input type="number" min="1" x-model="form.max_tenure_months" required class="input font-mono" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pt-6 border-t border-[var(--border)]">
+      <h2 class="font-display text-[20px] tracking-tight mb-1">Pricing</h2>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">
+        Interest method, rate, and penalties. EIR is computed automatically on save.
+      </p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-5">
+        <div class="sm:col-span-2">
+          <label class="label">Interest method <span class="text-red-500">*</span></label>
+          <select x-model="form.interest_method" required class="input">
+            <option value="FLAT">Flat</option>
+            <option value="REDUCING_BALANCE">Reducing balance</option>
+            <option value="DAILY">Daily</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Rate <span class="text-red-500">*</span></label>
+          <input type="number" step="0.01" min="0" x-model="form.interest_rate" required
+                 class="input font-mono" placeholder="24.00" />
+        </div>
+        <div>
+          <label class="label">Rate period</label>
+          <select x-model="form.interest_rate_period" class="input">
+            <option value="ANNUAL">Per annum</option>
+            <option value="MONTHLY">Per month</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Penalty rate (%)</label>
+          <input type="number" step="0.01" min="0" x-model="form.penalty_rate" class="input font-mono" />
+        </div>
+        <div>
+          <label class="label">Grace (days)</label>
+          <input type="number" min="0" x-model="form.grace_days" class="input font-mono" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">Days after due date before penalty.</p>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">First-installment grace (days)</label>
+          <input type="number" min="0" x-model="form.first_installment_grace_days" class="input font-mono" />
+          <p class="text-[11px] text-[var(--ink-3)] mt-1">Days between disbursement and first payment.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Schedule -->
+    <section class="pt-6 border-t border-[var(--border)]">
+      <h2 class="font-display text-[20px] tracking-tight mb-1">Schedule</h2>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">Repayment frequency. Drives how installments are generated.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="label">Repayment frequency</label>
+          <select x-model="form.repayment_frequency" class="input">
+            <option value="DAILY">Daily</option>
+            <option value="WEEKLY">Weekly</option>
+            <option value="BIWEEKLY">Bi-weekly</option>
+            <option value="MONTHLY">Monthly</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Eligibility -->
+    <section class="pt-6 border-t border-[var(--border)]">
+      <h2 class="font-display text-[20px] tracking-tight mb-1">Eligibility</h2>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">Requirements and options for this product.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-2)] hover:bg-[var(--cream)]/40 cursor-pointer">
+          <input type="checkbox" x-model="form.requires_guarantor" class="rounded" />
+          <span class="text-[13.5px]">Requires guarantor</span>
+        </label>
+        <label class="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-2)] hover:bg-[var(--cream)]/40 cursor-pointer">
+          <input type="checkbox" x-model="form.requires_collateral" class="rounded" />
+          <span class="text-[13.5px]">Requires collateral</span>
+        </label>
+        <label class="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-2)] hover:bg-[var(--cream)]/40 cursor-pointer">
+          <input type="checkbox" x-model="form.allow_group_loan" class="rounded" />
+          <span class="text-[13.5px]">Allows group loans</span>
+        </label>
+        <label class="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-2)] hover:bg-[var(--cream)]/40 cursor-pointer">
+          <input type="checkbox" x-model="form.is_active" class="rounded" />
+          <span class="text-[13.5px]">Product is active</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Fees -->
+    <section class="pt-6 border-t border-[var(--border)]">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="font-display text-[20px] tracking-tight">Fees</h2>
+        <button type="button" @click="addFee()"
+                class="text-[13px] font-medium text-[var(--accent)] hover:underline inline-flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Add fee
+        </button>
+      </div>
+      <p class="text-[12.5px] text-[var(--ink-3)] mb-4">
+        Application, processing, insurance, or other charges applied to this product.
+      </p>
+
+      <div class="space-y-3">
+        <template x-for="(fee, i) in form.fees" :key="i">
+          <div class="rounded-xl border border-[var(--border-2)] p-4 bg-[var(--cream)]/40">
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+              <div>
+                <label class="label !text-[11px] !mb-1">Type</label>
+                <select x-model="fee.fee_type" class="input !py-2 !text-[13px]">
+                  <option value="APPLICATION">Application</option>
+                  <option value="PROCESSING">Processing</option>
+                  <option value="INSURANCE">Insurance</option>
+                  <option value="MONITORING">Monitoring</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="label !text-[11px] !mb-1">Name</label>
+                <input type="text" x-model="fee.name" class="input !py-2 !text-[13px]"
+                       placeholder="e.g. Processing fee" />
+              </div>
+              <div>
+                <label class="label !text-[11px] !mb-1">Calculation</label>
+                <select x-model="fee.calculation_method" class="input !py-2 !text-[13px]">
+                  <option value="FLAT">Flat</option>
+                  <option value="PCT_PRINCIPAL">% of principal</option>
+                  <option value="PCT_OUTSTANDING">% of outstanding</option>
+                </select>
+              </div>
+              <div>
+                <label class="label !text-[11px] !mb-1"
+                       x-text="fee.calculation_method === 'FLAT' ? 'Amount (K)' : 'Percentage (%)'"></label>
+                <input x-show="fee.calculation_method === 'FLAT'"
+                       type="number" step="0.01" min="0"
+                       x-model="fee.amount" class="input !py-2 !text-[13px] font-mono" />
+                <input x-show="fee.calculation_method !== 'FLAT'"
+                       type="number" step="0.01" min="0"
+                       x-model="fee.percentage" class="input !py-2 !text-[13px] font-mono" />
+              </div>
+              <div>
+                <label class="label !text-[11px] !mb-1">Charged</label>
+                <select x-model="fee.charge_timing" class="input !py-2 !text-[13px]">
+                  <option value="DEDUCT_DISBURSEMENT">From disbursement</option>
+                  <option value="ADD_FIRST_INSTALLMENT">First installment</option>
+                  <option value="SEPARATE">Separately</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end mt-3">
+              <button type="button" @click="removeFee(i)"
+                      class="text-[12px] text-red-600 hover:underline">
+                Remove fee
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <p x-show="!form.fees.length"
+           class="text-[13px] text-[var(--ink-3)] py-3 px-4 rounded-xl border border-dashed border-[var(--border-2)] text-center">
+          No fees added yet. Click <strong>Add fee</strong> to include one.
+        </p>
+      </div>
+    </section>
+
+    <!-- Submit -->
+    <div class="flex items-center gap-3 pt-6 border-t border-[var(--border)]">
+      <button type="submit" :disabled="saving"
+              class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+        <span x-text="saving ? 'Saving…' : (mode === 'create' ? 'Create Product' : 'Save Changes')"></span>
+      </button>
+      <a href="/app/loans/products/"
+         class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+        Cancel
+      </a>
+    </div>
+  </form>
+</div>
+
+<script>
+function loanProductForm(mode, productId) {
+  const blank = {
+    code: '', name: '', description: '', category: 'OTHER',
+    min_amount: '', max_amount: '', min_tenure_months: 1, max_tenure_months: 12,
+    interest_method: 'REDUCING_BALANCE', interest_rate: '',
+    interest_rate_period: 'ANNUAL',
+    penalty_rate: 0, grace_days: 3, first_installment_grace_days: 0,
+    repayment_frequency: 'MONTHLY',
+    requires_guarantor: false, requires_collateral: false, allow_group_loan: false,
+    is_active: true,
+    fees: [],
+  };
+
+  return {
+    mode, productId,
+    loading: mode === 'edit',
+    saving: false,
+    error: '',
+    form: { ...blank, fees: [] },
+
+    async init() {
+      if (this.mode === 'edit') await this.load();
+      else this.loading = false;
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async load() {
+      try {
+        const r = await fetch(`/api/loans/products/${this.productId}/`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (!r.ok) {
+          this.error = `Could not load product (HTTP ${r.status}).`;
+          return;
+        }
+        const p = await r.json();
+        this.form = {
+          ...blank,
+          ...p,
+          fees: (p.fees || []).map(f => ({
+            fee_type: f.fee_type,
+            name: f.name,
+            calculation_method: f.calculation_method,
+            amount: f.amount,
+            percentage: f.percentage,
+            charge_timing: f.charge_timing,
+          })),
+        };
+      } catch (e) {
+        this.error = 'Network error loading product.';
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    addFee() {
+      this.form.fees.push({
+        fee_type: 'PROCESSING',
+        name: '',
+        calculation_method: 'PCT_PRINCIPAL',
+        amount: 0,
+        percentage: 0,
+        charge_timing: 'DEDUCT_DISBURSEMENT',
+      });
+    },
+
+    removeFee(i) { this.form.fees.splice(i, 1); },
+
+    async save() {
+      this.saving = true; this.error = '';
+      try {
+        const url = this.mode === 'create'
+          ? '/api/loans/products/'
+          : `/api/loans/products/${this.productId}/`;
+        const method = this.mode === 'create' ? 'POST' : 'PUT';
+
+        // Strip read-only/server-computed fields
+        const {
+          id, created_at, effective_interest_rate,
+          category_display, interest_method_display,
+          repayment_frequency_display, interest_rate_period_display,
+          ...payload
+        } = this.form;
+
+        const r = await fetch(url, {
+          method,
+          headers: {
+            'Authorization': 'Bearer ' + this.getToken(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = err.detail || err.error
+            || Object.entries(err)
+                 .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+                 .join(' · ')
+            || `HTTP ${r.status}`;
+          throw new Error(msg);
+        }
+
+        const saved = await r.json();
+        window.location.href = `/app/loans/products/${saved.id}/`;
+      } catch (e) {
+        this.error = e.message;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } finally {
+        this.saving = false;
+      }
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('loanProductForm', loanProductForm));
+</script>
+{% endblock %}

@@ -1,0 +1,654 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Bank Reconciliation — Nimbus{% endblock %}
+{% block page_title %}Bank Reconciliation{% endblock %}
+
+{% block content %}
+<div x-data="reconciliationPage" x-init="init()" x-cloak>
+    {% include "partials/breadcrumbs.html" %}
+
+  <!-- ============================================================ -->
+  <!-- Toolbar                                                      -->
+  <!-- ============================================================ -->
+  <div class="card p-4 mb-6">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-[200px]">
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">Bank Account</label>
+        <select x-model="selectedAccountId" @change="onAccountChange()" class="input !py-2">
+          <option value="">— Select account —</option>
+          <template x-for="acc in accounts" :key="acc.id">
+            <option :value="acc.id" x-text="acc.bank_name + ' · ' + acc.account_number + ' (' + acc.currency + ')'"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="flex-1 min-w-[200px]">
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">Statement</label>
+        <select x-model="selectedStatementId" @change="onStatementChange()" class="input !py-2"
+                :disabled="!statements.length">
+          <option value="">— Select statement —</option>
+          <template x-for="st in statements" :key="st.id">
+            <option :value="st.id"
+                x-text="fmtDate(st.period_from) + ' → ' + fmtDate(st.period_to) + ' · ' + st.status + ' (' + (st.unmatched_count ?? 0) + ' unmatched)'">
+            </option>
+          </template>
+        </select>
+      </div>
+
+      <div class="flex gap-2 flex-shrink-0">
+        <button @click="runAutoMatch()" :disabled="!selectedStatementId || matching"
+                class="btn-primary !py-2 !px-4 !text-[13px] !w-auto">
+          <span x-text="matching ? 'Matching…' : 'Run Auto-Match'"></span>
+        </button>
+
+        <button @click="computeReconciliation()" :disabled="!selectedStatementId || reconciling"
+                class="btn-primary !py-2 !px-4 !text-[13px] !w-auto !bg-[var(--ink)]">
+          <span x-text="reconciling ? 'Computing…' : 'Reconcile'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Alerts                                                       -->
+  <!-- ============================================================ -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px] flex items-center gap-2"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'">
+    <span x-text="message"></span>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Stat cards                                                   -->
+  <!-- ============================================================ -->
+  <template x-if="stats">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div class="card p-4">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Statement Lines</p>
+        <p class="text-[24px] font-display mt-1" x-text="stats.total_lines || 0"></p>
+      </div>
+      <div class="card p-4">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Matched</p>
+        <p class="text-[24px] font-display mt-1 text-emerald-700" x-text="stats.matched_lines || 0"></p>
+      </div>
+      <div class="card p-4">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Unmatched</p>
+        <p class="text-[24px] font-display mt-1 text-amber-700" x-text="stats.unmatched_lines || 0"></p>
+      </div>
+      <div class="card p-4">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">GL Closing</p>
+        <p class="text-[18px] font-mono mt-1"
+           x-text="stats.gl_closing == null ? '—' : fmtAmount(stats.gl_closing)"></p>
+      </div>
+      <div class="card p-4">
+        <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Difference</p>
+        <p class="text-[18px] font-mono mt-1"
+           x-text="stats.difference == null ? '—' : fmtAmount(stats.difference)"
+           :class="stats.difference == null
+                   ? 'text-[var(--ink-3)]'
+                   : (Math.abs(parseFloat(stats.difference)) < 0.01 ? 'text-emerald-700' : 'text-red-700')"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============================================================ -->
+  <!-- View toggle                                                  -->
+  <!-- ============================================================ -->
+  <div x-show="selectedStatementId" class="flex gap-2 mb-4">
+    <button @click="view='UNMATCHED'; loadLines()"
+            :class="view === 'UNMATCHED' ? 'btn-primary' : 'btn-secondary'"
+            class="!py-1.5 !px-3 !text-[12px] !w-auto">Unmatched</button>
+    <button @click="view='MATCHED'; loadLines()"
+            :class="view === 'MATCHED' ? 'btn-primary' : 'btn-secondary'"
+            class="!py-1.5 !px-3 !text-[12px] !w-auto">Matched</button>
+    <button @click="view='ALL'; loadLines()"
+            :class="view === 'ALL' ? 'btn-primary' : 'btn-secondary'"
+            class="!py-1.5 !px-3 !text-[12px] !w-auto">All</button>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Three-panel layout                                           -->
+  <!-- ============================================================ -->
+  <div x-show="selectedStatementId" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- LEFT: Bank statement lines -->
+    <div class="lg:col-span-5 card p-0 overflow-hidden">
+      <div class="px-4 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+        <h3 class="text-[14px] font-medium">Bank Statement Lines</h3>
+        <span class="text-[11px] font-mono text-[var(--ink-3)]" x-text="bankLines.length + ' lines'"></span>
+      </div>
+
+      <div class="max-h-[640px] overflow-y-auto" x-show="bankLines.length > 0">
+        <template x-for="line in bankLines" :key="line.id">
+          <div class="px-4 py-3 border-b border-[var(--border)] cursor-pointer transition hover:bg-[var(--cream)]"
+               :class="selectedLine?.id === line.id ? 'bg-[var(--cream)] border-l-4 border-l-[var(--accent)]' : 'border-l-4 border-l-transparent'"
+               @click="selectLine(line)">
+            <div class="flex justify-between items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <p class="text-[13px] font-medium truncate" x-text="line.description || '—'"></p>
+                <p class="text-[11px] text-[var(--ink-3)] font-mono mt-0.5">
+                  <span x-text="fmtDate(line.transaction_date)"></span>
+                  <span x-show="line.reference" class="mx-1">·</span>
+                  <span x-show="line.reference" x-text="line.reference"></span>
+                </p>
+                <!-- Matched indicator -->
+                <p x-show="line.match_status !== 'UNMATCHED'"
+                   class="text-[10px] mt-1 font-mono"
+                   :class="line.match_status === 'EXCLUDED'
+                           ? 'text-[var(--ink-3)]'
+                           : (line.match_status === 'AUTO_MATCHED' ? 'text-emerald-600' : 'text-blue-600')">
+                  <span x-text="line.match_status"></span>
+                  <span x-show="line.match_score" x-text="' · ' + line.match_score"></span>
+                  <span x-show="line.matched_journal_entry_ref" x-text="' · ' + line.matched_journal_entry_ref"></span>
+                </p>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <p class="text-[14px] font-mono font-medium"
+                   :class="parseFloat(line.credit) > 0 ? 'text-emerald-700' : 'text-red-700'"
+                   x-text="fmtSignedAmount(line)"></p>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="bankLines.length === 0" class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+        No lines for this filter.
+      </div>
+    </div>
+
+    <!-- RIGHT: Candidates + actions -->
+    <div class="lg:col-span-7 space-y-4">
+
+      <!-- Line detail -->
+      <div x-show="selectedLine" class="card p-5">
+        <h3 class="text-[14px] font-medium mb-3">Selected Bank Line</h3>
+        <div class="grid grid-cols-2 gap-4 text-[13px]">
+          <div>
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Date</p>
+            <p x-text="fmtDate(selectedLine?.transaction_date)"></p>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Reference</p>
+            <p class="font-mono" x-text="selectedLine?.reference || '—'"></p>
+          </div>
+          <div class="col-span-2">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Description</p>
+            <p x-text="selectedLine?.description || '—'"></p>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Debit (out)</p>
+            <p class="font-mono" x-text="fmtAmount(selectedLine?.debit)"></p>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-0.5">Credit (in)</p>
+            <p class="font-mono" x-text="fmtAmount(selectedLine?.credit)"></p>
+          </div>
+        </div>
+
+        <!-- Actions for a matched line -->
+        <div x-show="selectedLine && selectedLine.match_status !== 'UNMATCHED'"
+             class="mt-4 flex gap-2 pt-3 border-t border-[var(--border)]">
+          <button @click="unmatchLine()" :disabled="saving"
+                  class="text-[12.5px] text-red-600 hover:text-red-800 font-medium">
+            Unmatch
+          </button>
+          <button @click="excludeLine()" :disabled="saving"
+                  class="text-[12.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium ml-3">
+            Exclude
+          </button>
+        </div>
+      </div>
+
+      <!-- Candidate matches -->
+      <div x-show="selectedLine && selectedLine.match_status === 'UNMATCHED'" class="card p-0 overflow-hidden">
+        <div class="px-4 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+          <h3 class="text-[14px] font-medium">Candidate Journal Lines</h3>
+          <span class="text-[11px] font-mono text-[var(--ink-3)]" x-text="candidates.length + ' candidates'"></span>
+        </div>
+
+        <div x-show="loadingCandidates" class="p-6 text-center text-[13px] text-[var(--ink-3)]">
+          Loading candidates…
+        </div>
+
+        <div x-show="!loadingCandidates && candidates.length > 0" class="max-h-[400px] overflow-y-auto">
+          <template x-for="cand in candidates" :key="cand.journal_line_id">
+            <div class="px-4 py-3 border-b border-[var(--border)] cursor-pointer transition hover:bg-[var(--cream)]"
+                 :class="stagedCandidate?.journal_line_id === cand.journal_line_id
+                         ? 'bg-[var(--cream)] border-l-4 border-l-[var(--accent)]'
+                         : 'border-l-4 border-l-transparent'"
+                 @click="stagedCandidate = cand">
+              <div class="flex justify-between items-start gap-3">
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-medium truncate" x-text="cand.description"></p>
+                  <p class="text-[11px] text-[var(--ink-3)] font-mono mt-0.5">
+                    <span x-text="cand.journal_entry_reference"></span>
+                    <span class="mx-1">·</span>
+                    <span x-text="fmtDate(cand.journal_entry_date)"></span>
+                  </p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <p class="text-[14px] font-mono font-medium"
+                     x-text="parseFloat(cand.credit) > 0
+                             ? '+' + fmtAmount(cand.credit)
+                             : '-' + fmtAmount(cand.debit)"></p>
+                </div>
+              </div>
+
+              <!-- Score bar + breakdown -->
+              <div class="mt-2 flex items-center gap-2">
+                <div class="flex-1 h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+                  <div class="h-full rounded-full transition-all"
+                       :class="scoreColor(cand.score)"
+                       :style="'width: ' + cand.score + '%'"></div>
+                </div>
+                <span class="text-[11px] font-mono font-medium" x-text="cand.score"></span>
+              </div>
+              <div class="flex gap-3 mt-1 text-[10px] text-[var(--ink-3)] font-mono">
+                <span>Ref <span x-text="cand.score_breakdown.reference"></span></span>
+                <span>Amt <span x-text="cand.score_breakdown.amount"></span></span>
+                <span>Desc <span x-text="cand.score_breakdown.description"></span></span>
+                <span>Date <span x-text="cand.score_breakdown.date"></span></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div x-show="!loadingCandidates && candidates.length === 0"
+             class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+          No candidate matches found.
+        </div>
+      </div>
+
+      <!-- Staged match confirmation -->
+      <div x-show="stagedCandidate" class="card p-4 border-2"
+           style="border-color: color-mix(in srgb, var(--accent) 40%, transparent);">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Staged Match</p>
+            <p class="text-[14px] font-medium" x-text="stagedCandidate?.description"></p>
+            <p class="text-[12px] text-[var(--ink-3)] font-mono mt-1">
+              <span x-text="stagedCandidate?.journal_entry_reference"></span>
+              <span class="mx-1">·</span>
+              <span x-text="fmtDate(stagedCandidate?.journal_entry_date)"></span>
+              <span class="mx-1">·</span>
+              <span>Score <span x-text="stagedCandidate?.score"></span></span>
+            </p>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-[14px] font-mono font-medium"
+               x-text="parseFloat(stagedCandidate?.credit || 0) > 0
+                       ? '+' + fmtAmount(stagedCandidate?.credit)
+                       : '-' + fmtAmount(stagedCandidate?.debit)"></p>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-4 pt-3 border-t border-[var(--border)]">
+          <button @click="confirmMatch()" :disabled="saving"
+                  class="btn-primary !py-2 !px-5 !text-[13px] !w-auto">
+            <span x-text="saving ? 'Matching…' : 'Confirm Match'"></span>
+          </button>
+          <button @click="stagedCandidate = null"
+                  class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-3">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div x-show="!selectedStatementId" class="card p-12 text-center">
+    <p class="text-[15px] text-[var(--ink-2)]">Select a bank account and statement to begin.</p>
+  </div>
+</div>
+
+<script>
+function reconciliationPage() {
+  const API = '/api/accounting';
+
+  return {
+    accounts: [],
+    statements: [],
+    bankLines: [],
+    candidates: [],
+
+    selectedAccountId: '',
+    selectedStatementId: '',
+    selectedLine: null,
+    stagedCandidate: null,
+
+    view: 'UNMATCHED',
+
+    matching: false,
+    reconciling: false,
+    saving: false,
+    loadingCandidates: false,
+
+    message: '',
+    messageType: 'success',
+    stats: null,
+
+    async init() {
+      await this.loadAccounts();
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    authHeaders(extra = {}) {
+      return {
+        'Authorization': 'Bearer ' + this.getToken(),
+        ...extra,
+      };
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4500);
+    },
+
+    // ============================================================
+    // Loaders
+    // ============================================================
+    async loadAccounts() {
+      try {
+        const r = await fetch(`${API}/bank-accounts/?is_active=true`, {
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Failed to load bank accounts');
+        const data = await r.json();
+        this.accounts = data.results || data;
+      } catch (e) {
+        this.flash(e.message, 'error');
+      }
+    },
+
+    async onAccountChange() {
+      this.selectedStatementId = '';
+      this.statements = [];
+      this.bankLines = [];
+      this.selectedLine = null;
+      this.stagedCandidate = null;
+      this.candidates = [];
+      this.stats = null;
+
+      if (!this.selectedAccountId) return;
+
+      try {
+        const r = await fetch(
+          `${API}/bank-statements/?bank_account=${this.selectedAccountId}&ordering=-period_to`,
+          { headers: this.authHeaders() }
+        );
+        if (!r.ok) throw new Error('Failed to load statements');
+        const data = await r.json();
+        this.statements = data.results || data;
+
+        if (this.statements.length > 0) {
+          this.selectedStatementId = this.statements[0].id;
+          await this.onStatementChange();
+        }
+      } catch (e) {
+        this.flash(e.message, 'error');
+      }
+    },
+
+    async onStatementChange() {
+      this.selectedLine = null;
+      this.stagedCandidate = null;
+      this.candidates = [];
+
+      if (!this.selectedStatementId) {
+        this.stats = null;
+        return;
+      }
+
+      // ── FIX: Prepopulate the top stats from the selected statement
+      // so they are not blank before the user clicks "Reconcile".
+      const st = this.statements.find(s => s.id === this.selectedStatementId);
+      if (st) {
+        const total = st.line_count || 0;
+        const unmatched = st.unmatched_count || 0;
+        this.stats = {
+          total_lines: total,
+          matched_lines: total - unmatched,
+          unmatched_lines: unmatched,
+          gl_closing: null,      // populated only after Reconcile
+          difference: null,      // populated only after Reconcile
+        };
+      }
+
+      await this.loadLines();
+    },
+
+    async loadLines() {
+      if (!this.selectedStatementId) return;
+
+      const filter = this.view === 'ALL' ? '' : `&match_status=${this.view}`;
+      try {
+        const r = await fetch(
+          `${API}/bank-lines/?statement=${this.selectedStatementId}${filter}&ordering=transaction_date`,
+          { headers: this.authHeaders() }
+        );
+        if (!r.ok) throw new Error('Failed to load statement lines');
+        const data = await r.json();
+        this.bankLines = data.results || data;
+      } catch (e) {
+        this.flash(e.message, 'error');
+      }
+    },
+
+    async selectLine(line) {
+      this.selectedLine = line;
+      this.stagedCandidate = null;
+
+      if (line.match_status !== 'UNMATCHED') {
+        this.candidates = [];
+        return;
+      }
+
+      this.loadingCandidates = true;
+      try {
+        const r = await fetch(`${API}/bank-lines/${line.id}/suggestions/`, {
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Failed to load candidates');
+        const data = await r.json();
+        this.candidates = data.candidates || [];
+      } catch (e) {
+        this.flash(e.message, 'error');
+        this.candidates = [];
+      } finally {
+        this.loadingCandidates = false;
+      }
+    },
+
+    // ============================================================
+    // Actions
+    // ============================================================
+    async confirmMatch() {
+      if (!this.selectedLine || !this.stagedCandidate) return;
+      this.saving = true;
+      try {
+        const r = await fetch(`${API}/bank-lines/${this.selectedLine.id}/manual_match/`, {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            journal_line_id: this.stagedCandidate.journal_line_id,
+          }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || 'Match failed');
+        }
+        this.flash('Match confirmed.');
+        this.stagedCandidate = null;
+        this.selectedLine = null;
+        this.candidates = [];
+        await this.loadLines();
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async unmatchLine() {
+      if (!this.selectedLine) return;
+      this.saving = true;
+      try {
+        const r = await fetch(`${API}/bank-lines/${this.selectedLine.id}/unmatch/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Unmatch failed');
+        this.flash('Line unmatched.');
+        this.selectedLine = null;
+        await this.loadLines();
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async excludeLine() {
+      if (!this.selectedLine) return;
+      this.saving = true;
+      try {
+        const r = await fetch(`${API}/bank-lines/${this.selectedLine.id}/exclude/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Exclude failed');
+        this.flash('Line excluded.');
+        this.selectedLine = null;
+        await this.loadLines();
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async runAutoMatch() {
+      if (!this.selectedStatementId) return;
+      this.matching = true;
+      try {
+        const r = await fetch(`${API}/bank-statements/${this.selectedStatementId}/auto_match/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Auto-match failed');
+        const result = await r.json();
+        this.flash(`Auto-matched ${result.matched} line(s). ${result.unmatched} still unmatched.`);
+        this.selectedLine = null;
+        this.stagedCandidate = null;
+
+        // Refresh statement list so the dropdown shows the new counts
+        await this.refreshStatements();
+        await this.loadLines();
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.matching = false;
+      }
+    },
+
+    async computeReconciliation() {
+      if (!this.selectedStatementId) return;
+      this.reconciling = true;
+      try {
+        const r = await fetch(`${API}/bank-statements/${this.selectedStatementId}/reconcile/`, {
+          method: 'POST',
+          headers: this.authHeaders(),
+        });
+        if (!r.ok) throw new Error('Reconciliation failed');
+        const data = await r.json();
+        this.stats = {
+          total_lines: data.report.matched_lines + data.report.unmatched_lines,
+          matched_lines: data.report.matched_lines,
+          unmatched_lines: data.report.unmatched_lines,
+          gl_closing: data.report.gl_closing_balance,
+          difference: data.report.difference,
+        };
+        this.flash(data.report.is_reconciled
+          ? 'Reconciliation complete — books balance.'
+          : 'Reconciliation saved — difference remains.');
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.reconciling = false;
+      }
+    },
+
+    // ============================================================
+    // Helpers
+    // ============================================================
+    async refreshStatements() {
+      if (!this.selectedAccountId) return;
+      try {
+        const r = await fetch(
+          `${API}/bank-statements/?bank_account=${this.selectedAccountId}&ordering=-period_to`,
+          { headers: this.authHeaders() }
+        );
+        if (r.ok) {
+          const data = await r.json();
+          this.statements = data.results || data;
+          // Refresh the stats card from the updated statement object
+          const st = this.statements.find(s => s.id === this.selectedStatementId);
+          if (st) {
+            const total = st.line_count || 0;
+            const unmatched = st.unmatched_count || 0;
+            this.stats = {
+              ...this.stats,
+              total_lines: total,
+              matched_lines: total - unmatched,
+              unmatched_lines: unmatched,
+            };
+          }
+        }
+      } catch { /* silent */ }
+    },
+
+    scoreColor(score) {
+      if (score >= 95) return 'bg-emerald-500';
+      if (score >= 85) return 'bg-amber-400';
+      return 'bg-red-400';
+    },
+
+    fmtAmount(v) {
+      if (v == null || v === '') return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtSignedAmount(line) {
+      const credit = parseFloat(line.credit || 0);
+      const debit = parseFloat(line.debit || 0);
+      if (credit > 0) return '+' + this.fmtAmount(credit);
+      if (debit > 0) return '-' + this.fmtAmount(debit);
+      return 'K0.00';
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleDateString('en-GB', {
+          day: 'numeric', month: 'short', year: 'numeric',
+        });
+      } catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('reconciliationPage', reconciliationPage);
+});
+</script>
+{% endblock %}

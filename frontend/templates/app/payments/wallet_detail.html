@@ -1,0 +1,490 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Wallet — Nimbus{% endblock %}
+{% block page_title %}Branch Wallet{% endblock %}
+
+{% block content %}
+<div x-data="walletDetail('{{ branch_id }}')" x-init="init()">
+
+  <nav class="mb-6 flex items-center gap-2 text-[13px] text-[var(--ink-3)]" aria-label="Breadcrumb">
+    <a href="/app/dashboard/" class="hover:text-[var(--accent)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/app/wallets/" class="hover:text-[var(--accent)] transition">Wallets</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-[var(--ink)] font-medium" x-text="wallet?.branch_name || 'Loading…'"></span>
+  </nav>
+
+  <div x-show="flashError" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+       x-text="flashError"></div>
+  <div x-show="flashSuccess" x-cloak
+       class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-800"
+       x-text="flashSuccess"></div>
+
+  <div x-show="loading" class="animate-pulse">
+    <div class="h-40 rounded bg-[var(--border)] mb-6"></div>
+    <div class="h-64 rounded bg-[var(--border)]"></div>
+  </div>
+
+  <template x-if="wallet && !loading">
+    <div>
+      <!-- Header -->
+      <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
+        <div>
+          <h2 class="font-display text-[28px] sm:text-[32px] leading-tight tracking-tight"
+              x-text="wallet.branch_name"></h2>
+          <p class="mt-1 text-[13px] text-[var(--ink-3)] font-mono"
+             x-text="'Code: ' + wallet.branch_code"></p>
+          <p class="mt-2 text-[12px] text-[var(--ink-3)]"
+             x-show="wallet.last_reconciled_at">
+            Last reconciled: <span class="font-mono" x-text="fmtDateTime(wallet.last_reconciled_at)"></span>
+          </p>
+          <p class="mt-2 text-[12px] text-[var(--ink-3)] italic"
+             x-show="!wallet.last_reconciled_at">Never reconciled</p>
+        </div>
+        <button @click="promptReconcile()"
+                class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+          <span class="inline-flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Reconcile
+          </span>
+        </button>
+      </div>
+
+      <!-- 3 balance cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div class="card p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                 style="background: color-mix(in srgb, #059669 12%, transparent);">
+              <svg class="h-5 w-5" style="color: #059669;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+              </svg>
+            </div>
+          </div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Cash on Hand</p>
+          <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+             x-text="fmtMoney(wallet.cash_balance)"></p>
+        </div>
+
+        <div class="card p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                 style="background: color-mix(in srgb, #2563eb 12%, transparent);">
+              <svg class="h-5 w-5" style="color: #2563eb;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+            </div>
+          </div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Mobile Money</p>
+          <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+             x-text="fmtMoney(wallet.mobile_money_balance)"></p>
+        </div>
+
+        <div class="card p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                 style="background: color-mix(in srgb, #7c3aed 12%, transparent);">
+              <svg class="h-5 w-5" style="color: #7c3aed;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/>
+              </svg>
+            </div>
+          </div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Bank Balance</p>
+          <p class="font-display text-[36px] leading-none mt-2 tabular-nums"
+             x-text="fmtMoney(wallet.bank_balance)"></p>
+        </div>
+      </div>
+
+      <!-- Total -->
+      <div class="card p-6 mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Position</p>
+          
+          <!-- FIXED: Calculate total dynamically -->
+          <p class="font-display text-[40px] leading-none mt-2 tabular-nums"
+             :class="(Number(wallet.cash_balance) + Number(wallet.mobile_money_balance) + Number(wallet.bank_balance)) < 0 ? 'text-red-600' : ''"
+             x-text="fmtMoney(Number(wallet.cash_balance) + Number(wallet.mobile_money_balance) + Number(wallet.bank_balance))"></p>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="border-b border-[var(--border)] mb-6">
+        <div class="flex gap-1">
+          <button @click="tab = 'txns'"
+                  :class="tab === 'txns' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+                  class="px-4 py-3 text-[13.5px] font-medium transition">Transactions</button>
+          <button @click="tab = 'recons'"
+                  :class="tab === 'recons' ? 'text-[var(--ink)] border-b-2 border-[var(--accent)]' : 'text-[var(--ink-3)] border-b-2 border-transparent hover:text-[var(--ink-2)]'"
+                  class="px-4 py-3 text-[13.5px] font-medium transition">Reconciliation History</button>
+        </div>
+      </div>
+
+      <!-- Transactions tab -->
+      <div x-show="tab === 'txns'">
+        <div class="card overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+              <tr>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Date</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Type</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Reference</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Wallet</th>
+                <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="t in transactions" :key="t.id">
+                <tr class="border-t border-[var(--border)]">
+                  <td class="px-5 py-3.5 text-[12.5px] font-mono text-[var(--ink-3)]"
+                      x-text="fmtDateTime(t.created_at)"></td>
+                  <td class="px-5 py-3.5">
+                    <span class="pill" :class="typePill(t.transaction_type)"
+                          x-text="prettyType(t.transaction_type)"></span>
+                  </td>
+                  <td class="px-5 py-3.5 text-[12.5px] font-mono" x-text="t.reference || '—'"></td>
+                  <td class="px-5 py-3.5 text-[12.5px] text-[var(--ink-2)]" x-text="walletLabel(t)"></td>
+                  <td class="px-5 py-3.5 text-right tabular-nums text-[13.5px] font-mono"
+                      x-text="fmtMoney(t.amount)"></td>
+                </tr>
+              </template>
+              <tr x-show="transactions.length === 0">
+                <td colspan="5" class="text-center py-12 text-[13px] text-[var(--ink-3)]">
+                  No transactions yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Reconciliation history tab -->
+      <div x-show="tab === 'recons'">
+        <div class="card overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+              <tr>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Recon #</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Date</th>
+                <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">System</th>
+                <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Physical</th>
+                <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Variance</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Status</th>
+                <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in reconciliations" :key="r.id">
+                <tr class="border-t border-[var(--border)]">
+                  <td class="px-5 py-3 font-mono text-[12px]" x-text="r.reconciliation_number"></td>
+                  <td class="px-5 py-3 text-[12.5px] font-mono text-[var(--ink-3)]"
+                      x-text="fmtDateTime(r.reconciled_at)"></td>
+                  <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono"
+                      x-text="fmtMoney(r.system_total)"></td>
+                  <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono"
+                      x-text="fmtMoney(r.physical_total)"></td>
+                  <td class="px-5 py-3 text-right tabular-nums text-[13px] font-mono font-bold"
+                      :class="Math.abs(Number(r.variance_total)) < 0.01
+                              ? 'text-emerald-700'
+                              : Number(r.variance_total) > 0 ? 'text-amber-700' : 'text-red-700'"
+                      x-text="fmtMoney(r.variance_total)"></td>
+                  <td class="px-5 py-3">
+                    <span class="pill"
+                          :class="r.status === 'BALANCED' ? 'pill-success'
+                                  : r.status === 'VARIANCE' ? 'pill-danger' : 'pill-info'"
+                          x-text="r.status"></span>
+                  </td>
+                  <td class="px-5 py-3 text-[12.5px]" x-text="r.reconciled_by_name || '—'"></td>
+                </tr>
+              </template>
+              <tr x-show="reconciliations.length === 0">
+                <td colspan="7" class="text-center py-10 text-[13px] text-[var(--ink-3)]">
+                  No reconciliations yet. Click <strong>Reconcile</strong> to record the first one.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Reconcile modal (Fixed layout to prevent cutting off) -->
+  <template x-teleport="body">
+    <div x-show="showReconcileModal" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
+         @keydown.escape.window="showReconcileModal = false">
+      
+      <div class="flex min-h-full items-center justify-center p-4 sm:p-6"
+           @click.self="showReconcileModal = false">
+        
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+             @click.stop>
+
+          <!-- Fixed Header -->
+          <div class="p-6 border-b border-[var(--border)] shrink-0 bg-white">
+            <h3 class="font-display text-[24px] tracking-tight mb-2">Reconcile wallet</h3>
+            <p class="text-[13.5px] text-[var(--ink-2)]">
+              Enter the physical counts for each channel. The system will compute the variance.
+            </p>
+          </div>
+
+          <!-- Scrollable Body -->
+          <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Cash</label>
+                <p class="text-[11px] text-[var(--ink-3)] mb-1">
+                  System: <span class="font-mono" x-text="fmtMoney(wallet?.cash_balance)"></span>
+                </p>
+                <input type="number" step="0.01" min="0" x-model.number="form.physical_cash" class="input" />
+                <p class="text-[11px] mt-1 font-mono"
+                   :class="Number(form.physical_cash || 0) === Number(wallet?.cash_balance || 0) ? 'text-emerald-700' : 'text-amber-700'"
+                   x-text="'Variance: ' + fmtMoney(Number(form.physical_cash || 0) - Number(wallet?.cash_balance || 0))"></p>
+              </div>
+              <div>
+                <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Mobile Money</label>
+                <p class="text-[11px] text-[var(--ink-3)] mb-1">
+                  System: <span class="font-mono" x-text="fmtMoney(wallet?.mobile_money_balance)"></span>
+                </p>
+                <input type="number" step="0.01" min="0" x-model.number="form.physical_momo" class="input" />
+                <p class="text-[11px] mt-1 font-mono"
+                   :class="Number(form.physical_momo || 0) === Number(wallet?.mobile_money_balance || 0) ? 'text-emerald-700' : 'text-amber-700'"
+                   x-text="'Variance: ' + fmtMoney(Number(form.physical_momo || 0) - Number(wallet?.mobile_money_balance || 0))"></p>
+              </div>
+              <div>
+                <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Bank</label>
+                <p class="text-[11px] text-[var(--ink-3)] mb-1">
+                  System: <span class="font-mono" x-text="fmtMoney(wallet?.bank_balance)"></span>
+                </p>
+                <input type="number" step="0.01" min="0" x-model.number="form.physical_bank" class="input" />
+                <p class="text-[11px] mt-1 font-mono"
+                   :class="Number(form.physical_bank || 0) === Number(wallet?.bank_balance || 0) ? 'text-emerald-700' : 'text-amber-700'"
+                   x-text="'Variance: ' + fmtMoney(Number(form.physical_bank || 0) - Number(wallet?.bank_balance || 0))"></p>
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Notes (optional)</label>
+              <textarea x-model="form.notes" rows="3" class="input resize-none"
+                        placeholder="Explain any variance or attach context..."></textarea>
+            </div>
+
+            <div class="p-3 rounded-xl border"
+                 :class="hasVariance ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'">
+              <p class="text-[13px] font-medium"
+                 :class="hasVariance ? 'text-red-800' : 'text-emerald-800'"
+                 x-text="hasVariance ? 'Variance detected — this will be logged for review' : 'Balanced — no variance'"></p>
+              <p class="text-[12px] mt-1" :class="hasVariance ? 'text-red-700' : 'text-emerald-700'"
+                 x-text="'Total variance: ' + fmtMoney(totalVariance)"></p>
+            </div>
+
+            <div x-show="modalError" x-cloak
+                 class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800"
+                 x-text="modalError"></div>
+          </div>
+
+          <!-- Fixed Footer -->
+          <div class="p-6 border-t border-[var(--border)] flex justify-end gap-3 shrink-0 bg-[var(--cream)]/50 rounded-b-2xl">
+            <button @click="showReconcileModal = false"
+                    class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)] bg-white border border-[var(--border-2)] rounded-lg">
+              Cancel
+            </button>
+            <button @click="submitReconcile()" :disabled="submitting"
+                    class="btn-primary !w-auto !py-2 !px-5 !text-[13.5px] disabled:opacity-50">
+              <span x-text="submitting ? 'Saving…' : 'Save Reconciliation'"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function walletDetail(branchId) {
+  return {
+    branchId,
+    wallet: null,
+    transactions: [],
+    reconciliations: [],
+    loading: true,
+    submitting: false,
+    tab: 'txns',
+    flashError: '',
+    flashSuccess: '',
+
+    showReconcileModal: false,
+    modalError: '',
+    form: {
+      physical_cash: 0,
+      physical_momo: 0,
+      physical_bank: 0,
+      notes: '',
+    },
+
+    async init() {
+      await Promise.all([
+        this.loadWallet(),
+        this.loadTransactions(),
+        this.loadReconciliations(),
+      ]);
+      this.loading = false;
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async api(url, opts = {}) {
+      const r = await fetch(url, {
+        ...opts,
+        headers: {
+          'Authorization': 'Bearer ' + this.getToken(),
+          'Content-Type': 'application/json',
+          ...(opts.headers || {}),
+        },
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || err.detail || ('HTTP ' + r.status));
+      }
+      return r.json();
+    },
+
+    async loadWallet() {
+      try {
+        const data = await this.api('/api/payments/wallets/?branch=' + this.branchId);
+        const list = data.results || data;
+        this.wallet = list[0];
+        if (!this.wallet) this.flashError = 'No wallet found for this branch.';
+      } catch (e) {
+        this.flashError = 'Could not load wallet: ' + e.message;
+      }
+    },
+
+    async loadTransactions() {
+      try {
+        const data = await this.api(
+          '/api/payments/transactions/?branch=' + this.branchId + '&page_size=100'
+        );
+        this.transactions = data.results || data;
+      } catch (e) {
+        console.error('Transaction load failed', e);
+      }
+    },
+
+    async loadReconciliations() {
+      try {
+        const data = await this.api(
+          '/api/payments/wallet-reconciliations/?branch=' + this.branchId
+        );
+        this.reconciliations = data.results || data;
+      } catch (e) {
+        console.error('Reconciliation load failed', e);
+      }
+    },
+
+    get hasVariance() {
+      return Math.abs(this.totalVariance) >= 0.01;
+    },
+
+    get totalVariance() {
+      const cashVar = Number(this.form.physical_cash || 0) - Number(this.wallet?.cash_balance || 0);
+      const momoVar = Number(this.form.physical_momo || 0) - Number(this.wallet?.mobile_money_balance || 0);
+      const bankVar = Number(this.form.physical_bank || 0) - Number(this.wallet?.bank_balance || 0);
+      return cashVar + momoVar + bankVar;
+    },
+
+    promptReconcile() {
+      this.form = {
+        physical_cash: Number(this.wallet?.cash_balance || 0),
+        physical_momo: Number(this.wallet?.mobile_money_balance || 0),
+        physical_bank: Number(this.wallet?.bank_balance || 0),
+        notes: '',
+      };
+      this.modalError = '';
+      this.showReconcileModal = true;
+    },
+
+    async submitReconcile() {
+      this.submitting = true;
+      this.modalError = '';
+      try {
+        await this.api('/api/payments/wallet-reconciliations/reconcile/', {
+          method: 'POST',
+          body: JSON.stringify({
+            branch: this.branchId,
+            physical_cash: this.form.physical_cash,
+            physical_momo: this.form.physical_momo,
+            physical_bank: this.form.physical_bank,
+            notes: this.form.notes,
+          }),
+        });
+        this.showReconcileModal = false;
+        this.flashSuccess = 'Reconciliation saved.';
+        setTimeout(() => this.flashSuccess = '', 5000);
+        await Promise.all([this.loadWallet(), this.loadReconciliations()]);
+      } catch (e) {
+        this.modalError = e.message;
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    fmtMoney(v) {
+      const n = Number(v || 0);
+      return 'K ' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+
+    prettyType(t) {
+      return {
+        DISBURSEMENT: 'Disbursement',
+        LOAN_COLLECTION: 'Loan Collection',
+        TRANSFER_IN: 'Transfer In',
+        TRANSFER_OUT: 'Transfer Out',
+        EXPENSE: 'Expense',
+      }[t] || t;
+    },
+
+    typePill(t) {
+      return {
+        DISBURSEMENT: 'pill-warning',
+        LOAN_COLLECTION: 'pill-success',
+        TRANSFER_IN: 'pill-info',
+        TRANSFER_OUT: 'pill-info',
+        EXPENSE: 'pill-danger',
+      }[t] || 'pill-neutral';
+    },
+
+    walletLabel(t) {
+      if (t.source_wallet && t.dest_wallet) return t.source_wallet + ' → ' + t.dest_wallet;
+      if (t.dest_wallet) return '→ ' + t.dest_wallet;
+      if (t.source_wallet) return t.source_wallet;
+      return '—';
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('walletDetail', walletDetail);
+});
+</script>
+{% endblock %}

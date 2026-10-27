@@ -1,0 +1,248 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Loan Product — Nimbus{% endblock %}
+{% block page_title %}Loan Product{% endblock %}
+
+{% block content %}
+<div x-data="loanProductDetail('{{ product_id }}')" x-init="init()">
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <a href="/app/loans/products/"
+     class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium inline-flex items-center gap-1 mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    All loan products
+  </a>
+
+  <!-- Loading -->
+  <div x-show="loading" class="animate-pulse">
+    <div class="h-32 rounded-2xl bg-[var(--border)] mb-4"></div>
+    <div class="h-24 rounded-2xl bg-[var(--border)] mb-4"></div>
+    <div class="h-64 rounded-2xl bg-[var(--border)]"></div>
+  </div>
+
+  <!-- Error -->
+  <div x-show="!loading && error" x-cloak
+       class="card p-6 border border-red-200 bg-red-50">
+    <p class="text-[14px] text-red-800" x-text="error"></p>
+  </div>
+
+  <template x-if="!loading && !error && product && product.id">
+    <div>
+
+      <!-- Header card -->
+      <div class="card p-6 mb-6">
+        <div class="flex items-start justify-between gap-6 flex-wrap">
+          <div class="min-w-0">
+            <div class="flex items-center gap-3 flex-wrap mb-2">
+              <span class="font-mono text-[12.5px] text-[var(--ink-3)]"
+                    x-text="product.code"></span>
+              <span class="pill pill-neutral" x-text="product.category_display"></span>
+              <span class="pill"
+                    :class="product.is_active ? 'pill-success' : 'pill-neutral'"
+                    x-text="product.is_active ? 'Active' : 'Inactive'"></span>
+            </div>
+            <h1 class="font-display text-[28px] sm:text-[32px] leading-tight tracking-tight"
+                x-text="product.name"></h1>
+            <p class="text-[13.5px] text-[var(--ink-2)] mt-3 max-w-2xl"
+               x-show="product.description" x-text="product.description"></p>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <a :href="'/app/loans/products/' + product.id + '/edit/'"
+               class="!w-auto px-4 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition inline-flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              Edit
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key metrics -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Interest</p>
+          <p class="font-display text-[24px] mt-1 tabular-nums">
+            <span x-text="product.interest_rate"></span>%
+            <span class="text-[13px] text-[var(--ink-3)]"
+                  x-text="product.interest_rate_period === 'MONTHLY' ? '/mo' : '/yr'"></span>
+          </p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-1"
+             x-text="product.interest_method_display"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Effective rate</p>
+          <p class="font-display text-[24px] mt-1 tabular-nums">
+            <span x-text="product.effective_interest_rate || '—'"></span>
+            <span class="text-[13px] text-[var(--ink-3)]"
+                  x-show="product.effective_interest_rate">%</span>
+          </p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-1">Annualized EIR</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Amount range</p>
+          <p class="font-display text-[18px] mt-1 tabular-nums"
+             x-text="fmtMoney(product.min_amount)"></p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-1">
+            up to <span x-text="fmtMoney(product.max_amount)"></span>
+          </p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Tenure</p>
+          <p class="font-display text-[24px] mt-1 tabular-nums">
+            <span x-text="product.min_tenure_months"></span>–<span x-text="product.max_tenure_months"></span>
+            <span class="text-[13px] text-[var(--ink-3)]">mo</span>
+          </p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-1"
+             x-text="product.repayment_frequency_display"></p>
+        </div>
+      </div>
+
+      <!-- Configuration details -->
+      <div class="card p-6 mb-6">
+        <h3 class="text-[14px] font-medium mb-4">Configuration</h3>
+        <dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5 text-[13.5px]">
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Penalty rate</dt>
+            <dd class="mt-1 tabular-nums"><span x-text="product.penalty_rate"></span>%</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Grace (penalty)</dt>
+            <dd class="mt-1"><span x-text="product.grace_days"></span> days</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">First-installment grace</dt>
+            <dd class="mt-1"><span x-text="product.first_installment_grace_days || 0"></span> days</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Guarantor required</dt>
+            <dd class="mt-1" x-text="product.requires_guarantor ? 'Yes' : 'No'"></dd>
+          </div>
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Collateral required</dt>
+            <dd class="mt-1" x-text="product.requires_collateral ? 'Yes' : 'No'"></dd>
+          </div>
+          <div>
+            <dt class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Group loans allowed</dt>
+            <dd class="mt-1" x-text="product.allow_group_loan ? 'Yes' : 'No'"></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Fees -->
+      <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+          <h3 class="text-[14px] font-medium">Fees</h3>
+          <p class="text-[12px] text-[var(--ink-3)]"
+             x-text="(product.fees?.length || 0) + (product.fees?.length === 1 ? ' fee configured' : ' fees configured')"></p>
+        </div>
+
+        <template x-if="product.fees && product.fees.length">
+          <table class="w-full">
+            <thead class="bg-[var(--cream)]">
+              <tr>
+                <th class="text-left px-5 py-2.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Type</th>
+                <th class="text-left px-5 py-2.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Name</th>
+                <th class="text-left px-5 py-2.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Calculation</th>
+                <th class="text-right px-5 py-2.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Value</th>
+                <th class="text-left px-5 py-2.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Charged</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="f in product.fees" :key="f.id">
+                <tr class="border-t border-[var(--border)]">
+                  <td class="px-5 py-3 text-[12.5px]">
+                    <span class="pill pill-neutral text-[10.5px]"
+                          x-text="feeTypeLabel(f.fee_type)"></span>
+                  </td>
+                  <td class="px-5 py-3 text-[13.5px]" x-text="f.name"></td>
+                  <td class="px-5 py-3 text-[12.5px] text-[var(--ink-2)]"
+                      x-text="calcLabel(f.calculation_method)"></td>
+                  <td class="px-5 py-3 text-right tabular-nums text-[13.5px] font-medium">
+                    <template x-if="f.calculation_method === 'FLAT'">
+                      <span x-text="fmtMoney(f.amount)"></span>
+                    </template>
+                    <template x-if="f.calculation_method !== 'FLAT'">
+                      <span x-text="f.percentage + '%'"></span>
+                    </template>
+                  </td>
+                  <td class="px-5 py-3 text-[12.5px] text-[var(--ink-2)]"
+                      x-text="timingLabel(f.charge_timing)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+
+        <template x-if="!product.fees || !product.fees.length">
+          <div class="px-6 py-10 text-center text-[13.5px] text-[var(--ink-3)]">
+            No fees configured for this product.
+            <a :href="'/app/loans/products/' + product.id + '/edit/'"
+               class="text-[var(--accent)] hover:underline font-medium ml-1">Add one</a>.
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function loanProductDetail(productId) {
+  return {
+    loading: true, product: null, error: '',
+
+    async init() { await this.load(); },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async load() {
+      this.loading = true; this.error = '';
+      try {
+        const r = await fetch(`/api/loans/products/${productId}/`, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+        if (!r.ok) {
+          this.error = `Could not load product (HTTP ${r.status}).`;
+          return;
+        }
+        this.product = await r.json();
+      } catch (e) {
+        this.error = 'Network error loading product.';
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    fmtMoney(v) {
+      const n = Number(v);
+      if (!isFinite(n)) return 'K 0.00';
+      const body = Math.abs(n).toLocaleString('en-ZM', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+      });
+      return (n < 0 ? '-K ' : 'K ') + body;
+    },
+
+    feeTypeLabel(t) {
+      return { APPLICATION:'Application', PROCESSING:'Processing', INSURANCE:'Insurance',
+               MONITORING:'Monitoring', OTHER:'Other' }[t] || t;
+    },
+    calcLabel(m) {
+      return { FLAT:'Flat amount', PCT_PRINCIPAL:'% of principal',
+               PCT_OUTSTANDING:'% of outstanding' }[m] || m;
+    },
+    timingLabel(t) {
+      return { DEDUCT_DISBURSEMENT:'Deducted from disbursement',
+               ADD_FIRST_INSTALLMENT:'Added to first installment',
+               SEPARATE:'Charged separately' }[t] || t;
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('loanProductDetail', loanProductDetail));
+</script>
+{% endblock %}

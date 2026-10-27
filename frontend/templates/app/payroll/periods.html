@@ -1,0 +1,107 @@
+{% extends 'app/base_app.html' %}
+
+{% block page_title %}Payroll Periods{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto py-8 px-4">
+    
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-display font-semibold text-[var(--ink)]">Payroll Periods</h1>
+            <p class="text-sm text-[var(--ink-3)] mt-1">Define cutoff dates and pay dates for payroll runs.</p>
+        </div>
+        <a href="{% url 'payroll-dashboard' %}" class="text-sm font-medium text-[var(--accent)] hover:underline">
+            &larr; Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Create Form -->
+    <div class="bg-white p-6 rounded-xl border border-[var(--border)] shadow-sm mb-8">
+        <h2 class="text-lg font-semibold text-[var(--ink)] mb-4">Create New Period</h2>
+        
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-5 items-end">
+            {% csrf_token %}
+            
+            <!-- Period Name -->
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Period Name</label>
+                <input type="text" name="name" placeholder="e.g., October 2026" required 
+                       class="w-full px-4 py-2.5 rounded-lg border border-[var(--border-2)] bg-white text-[var(--ink)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition">
+            </div>
+
+            <!-- Start Date -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Start Date</label>
+                <input type="date" name="start_date" required 
+                       class="w-full px-4 py-2.5 rounded-lg border border-[var(--border-2)] bg-white text-[var(--ink)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition">
+            </div>
+
+            <!-- End Date -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">End Date</label>
+                <input type="date" name="end_date" required 
+                       class="w-full px-4 py-2.5 rounded-lg border border-[var(--border-2)] bg-white text-[var(--ink)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition">
+            </div>
+
+            <!-- Payment Date -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--ink-2)] mb-1">Payment Date</label>
+                <input type="date" name="payment_date" required 
+                       class="w-full px-4 py-2.5 rounded-lg border border-[var(--border-2)] bg-white text-[var(--ink)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition">
+            </div>
+
+            <!-- Submit Button -->
+            <div>
+                <button type="submit" 
+                        class="w-full flex items-center justify-center px-4 py-2.5 rounded-lg bg-black text-white font-medium hover:bg-gray-800 cursor-pointer transition shadow-sm">
+                    Create Period
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- List of Periods -->
+    <div class="bg-white rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+        <table class="w-full text-left whitespace-nowrap">
+            <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+                <tr>
+                    <th class="px-6 py-4 text-xs font-semibold text-[var(--ink-3)] uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-4 text-xs font-semibold text-[var(--ink-3)] uppercase tracking-wider">Start</th>
+                    <th class="px-6 py-4 text-xs font-semibold text-[var(--ink-3)] uppercase tracking-wider">End</th>
+                    <th class="px-6 py-4 text-xs font-semibold text-[var(--ink-3)] uppercase tracking-wider">Pay Date</th>
+                    <th class="px-6 py-4 text-xs font-semibold text-[var(--ink-3)] uppercase tracking-wider">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--border)]">
+                {% for p in periods %}
+                <tr class="hover:bg-[var(--cream)]/50 transition">
+                    <td class="px-6 py-4 font-medium text-[var(--ink)]">{{ p.name }}</td>
+                    <td class="px-6 py-4 text-sm text-[var(--ink-2)]">{{ p.start_date|date:"d M Y" }}</td>
+                    <td class="px-6 py-4 text-sm text-[var(--ink-2)]">{{ p.end_date|date:"d M Y" }}</td>
+                    <td class="px-6 py-4 text-sm text-[var(--ink-2)]">{{ p.payment_date|date:"d M Y" }}</td>
+                    <td class="px-6 py-4">
+                        {% if p.is_closed %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Locked
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                Open
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-[var(--ink-3)]">
+                        <p class="text-base mb-1">No periods created yet.</p>
+                        <p class="text-sm">Use the form above to add your first payroll period.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

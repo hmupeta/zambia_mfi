@@ -1,0 +1,369 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Reports — Nimbus{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div x-data="reportsPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <!-- Header -->
+  <div class="card p-6 lg:p-8 mb-6">
+    <div class="flex items-start justify-between gap-6 flex-wrap">
+      <div>
+        <h2 class="font-display text-[28px] lg:text-[32px] tracking-tight">Reports</h2>
+        <p class="text-[14px] text-[var(--ink-2)] mt-2">
+          Download financial statements, regulatory filings, and operational reports.
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <a href="/app/accounting/statements/"
+           class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">
+          View Statements →
+        </a>
+        <a href="/app/accounting/boz-reports/"
+           class="btn-secondary !py-2.5 !px-4 !text-[13px] !w-auto">
+          View BoZ Reports →
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <!-- ═══ Financial Statements ═══ -->
+  <h3 class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Financial Statements</h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+
+    <!-- Trial Balance -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="w-5 h-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m-6 4h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Trial Balance</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Every GL account with total debits and credits.
+          </p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">As of</label>
+          <input type="date" x-model="asOf" class="input !py-2" />
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="download('/api/accounting/exports/trial-balance/', {as_of: asOf, format: 'pdf'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">PDF</button>
+          <button @click="download('/api/accounting/exports/trial-balance/', {as_of: asOf, format: 'excel'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Income Statement -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="w-5 h-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Income Statement (P&amp;L)</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Revenue minus expenses for a period.
+          </p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">From</label>
+            <input type="date" x-model="periodFrom" class="input !py-2" />
+          </div>
+          <div>
+            <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">To</label>
+            <input type="date" x-model="periodTo" class="input !py-2" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="download('/api/accounting/exports/income-statement/', {from: periodFrom, to: periodTo, format: 'pdf'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">PDF</button>
+          <button @click="download('/api/accounting/exports/income-statement/', {from: periodFrom, to: periodTo, format: 'excel'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Sheet -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="w-5 h-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Balance Sheet</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Assets = Liabilities + Equity.
+          </p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">As of</label>
+          <input type="date" x-model="asOf" class="input !py-2" />
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="download('/api/accounting/exports/balance-sheet/', {as_of: asOf, format: 'pdf'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">PDF</button>
+          <button @click="download('/api/accounting/exports/balance-sheet/', {as_of: asOf, format: 'excel'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">Excel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Bank of Zambia Returns ═══ -->
+  <h3 class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Bank of Zambia Returns</h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+
+    <!-- NPL Return -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, #DC2626 12%, transparent);">
+          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">NPL Return</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Non-performing loan schedule with provisions.
+          </p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">As of</label>
+          <input type="date" x-model="asOf" class="input !py-2" />
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="download('/api/accounting/exports/npl-return/', {as_of: asOf, format: 'pdf'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">PDF</button>
+          <button @click="download('/api/accounting/exports/npl-return/', {as_of: asOf, format: 'excel'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAR -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, #EA580C 12%, transparent);">
+          <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Portfolio at Risk</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            PAR 1 / 7 / 30 / 60 / 90 ratios.
+          </p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono block mb-1">As of</label>
+          <input type="date" x-model="asOf" class="input !py-2" />
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="download('/api/accounting/exports/portfolio-at-risk/', {as_of: asOf, format: 'pdf'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">PDF</button>
+          <button @click="download('/api/accounting/exports/portfolio-at-risk/', {as_of: asOf, format: 'excel'})"
+                  :disabled="busy"
+                  class="btn-secondary !py-2 !text-[12.5px] !w-full">Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Placeholder -->
+    <div class="card p-5 border-dashed" style="border-style: dashed;">
+      <p class="text-[13px] text-[var(--ink-3)]">
+        <strong class="text-[var(--ink-2)]">More returns coming.</strong>
+        Capital adequacy, liquidity, and monthly prudential returns will appear here.
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══ Operational Reports ═══ -->
+  <h3 class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-3">Operational Reports</h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+    <a href="/app/dashboard/executive/"
+       class="card card-hover p-5 transition group">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, #0891B2 12%, transparent);">
+          <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Executive Dashboard</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Portfolio trends, PAR, income/expense, disbursements.
+          </p>
+        </div>
+        <svg class="w-4 h-4 text-[var(--ink-4)] group-hover:text-[var(--ink)] transition mt-1"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </a>
+
+    <a href="/app/accounting/journal-entries/"
+       class="card card-hover p-5 transition group">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, #7C3AED 12%, transparent);">
+          <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Journal Register</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            Every posted and reversed journal entry.
+          </p>
+        </div>
+        <svg class="w-4 h-4 text-[var(--ink-4)] group-hover:text-[var(--ink)] transition mt-1"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </a>
+
+    <a href="/app/payments/"
+       class="card card-hover p-5 transition group">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, #047857 12%, transparent);">
+          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[15px] font-medium">Collections Report</p>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-1">
+            All payments received with filters and drill-down.
+          </p>
+        </div>
+        <svg class="w-4 h-4 text-[var(--ink-4)] group-hover:text-[var(--ink)] transition mt-1"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </a>
+  </div>
+</div>
+
+<script>
+function reportsPage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = today.slice(0, 8) + '01';
+
+  return {
+    asOf: today,
+    periodFrom: monthStart,
+    periodTo: today,
+    busy: false,
+    message: '',
+    messageType: 'success',
+
+    async init() {},
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async download(endpoint, params) {
+      this.busy = true;
+      this.message = '';
+      try {
+        const query = new URLSearchParams(params).toString();
+        const url = `${endpoint}?${query}`;
+
+        const r = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + this.getToken() },
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || `Download failed (HTTP ${r.status})`);
+        }
+
+        const blob = await r.blob();
+
+        // Extract filename from Content-Disposition header (same-origin so no CORS issue)
+        const disposition = r.headers.get('content-disposition') || '';
+        let filename = 'report';
+        const m = disposition.match(/filename="?([^";]+)"?/);
+        if (m) filename = m[1];
+
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+        this.flash(`Downloaded ${filename}`);
+      } catch (e) {
+        this.flash(e.message, 'error');
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('reportsPage', reportsPage);
+});
+</script>
+{% endblock %}

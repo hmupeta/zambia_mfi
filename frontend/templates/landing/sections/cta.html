@@ -1,0 +1,37 @@
+<section id="{{ section.anchor|default:'contact' }}" class="py-28 lg:py-36 bg-[#0A0A0A] relative overflow-hidden scroll-mt-20 noise">
+  <div class="absolute inset-0 bg-grid opacity-[0.05] pointer-events-none"></div>
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full opacity-30 pointer-events-none" style="background: radial-gradient(ellipse, var(--accent), transparent 70%); filter: blur(100px);"></div>
+
+  <div class="relative max-w-[900px] mx-auto px-6 lg:px-8 text-center reveal">
+    <h2 class="font-display text-[48px] sm:text-[72px] lg:text-[88px] leading-[1] text-white">
+      {{ section.title }}
+    </h2>
+    {% if section.subtitle %}
+    <p class="mt-8 text-[17px] lg:text-[19px] text-[#A1A1AA] leading-[1.65] max-w-[560px] mx-auto">{{ section.subtitle }}</p>
+    {% endif %}
+
+    <div class="mt-12 flex flex-wrap gap-3 justify-center">
+      {% if section.metadata.primary_cta_text %}
+      <a href="{{ section.metadata.primary_cta_url|default:'mailto:hello@example.com' }}"
+         class="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-white text-[var(--ink)] font-medium text-[15px] hover:opacity-90 transition shadow-[0_20px_40px_-12px_rgba(255,255,255,0.15)]">
+        {{ section.metadata.primary_cta_text }}
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+        </svg>
+      </a>
+      {% endif %}
+      {% if section.metadata.secondary_cta_text %}
+      <a href="{{ section.metadata.secondary_cta_url|default:'tel:+260000000000' }}"
+         class="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl border border-white/15 text-white font-medium text-[15px] hover:bg-white/5 transition">
+        {{ section.metadata.secondary_cta_text }}
+      </a>
+      {% endif %}
+    </div>
+
+    {% if section.metadata.email %}
+    <p class="mt-8 text-[13.5px] text-[#71717A]">
+      Or email <a href="mailto:{{ section.metadata.email }}" class="text-white underline underline-offset-4 decoration-white/30 hover:decoration-white transition">{{ section.metadata.email }}</a>
+    </p>
+    {% endif %}
+  </div>
+</section>

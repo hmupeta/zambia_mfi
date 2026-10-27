@@ -1,0 +1,161 @@
+{% extends "app/base_app.html" %}
+{% block title %}Restructures — Nimbus{% endblock %}
+{% block page_title %}Loan Restructures{% endblock %}
+
+{% block content %}
+<div x-data="restructuresList()" x-init="init()">
+
+  <nav class="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-3)] mb-5">
+    <a href="/app/dashboard/" class="hover:text-[var(--ink)] transition">Dashboard</a>
+    <svg class="w-3.5 h-3.5 text-[var(--ink-4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-[var(--ink)] font-medium">Restructures</span>
+  </nav>
+
+  <div class="mb-6">
+    <h2 class="font-display text-[32px] sm:text-[36px] leading-tight tracking-tight">Loan Restructures</h2>
+    <p class="mt-1.5 text-[14px] text-[var(--ink-2)]">Restructuring requests across your portfolio.</p>
+  </div>
+
+  <div x-show="error" x-cloak class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800" x-text="error"></div>
+
+  <!-- Stats -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <template x-for="card in statCards" :key="card.key">
+      <button @click="filterStatus = (filterStatus === card.key ? '' : card.key); load()"
+              class="card p-4 text-left transition hover:shadow-md"
+              :class="filterStatus === card.key ? 'ring-2 ring-[var(--accent)]' : ''">
+        <p class="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono" x-text="card.label"></p>
+        <p class="font-display text-[26px] leading-none mt-1.5 tabular-nums" x-text="stats[card.key] ?? 0"></p>
+      </button>
+    </template>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
+    <input type="search" x-model.debounce.400ms="search" @input="load()"
+           placeholder="Search loan #, client name…" class="input !w-72" />
+    <select x-model="filterType" @change="load()" class="input !w-auto">
+      <option value="">All types</option>
+      <option value="EXTEND_TERM">Extend Term</option>
+      <option value="REDUCE_AMOUNT">Reduce Amount</option>
+      <option value="MORATORIUM">Moratorium</option>
+      <option value="REFINANCE">Refinance</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="card overflow-hidden">
+    <div x-show="loading" class="p-6 space-y-3">
+      <template x-for="i in 5" :key="i"><div class="h-5 rounded bg-[var(--border)] animate-pulse"></div></template>
+    </div>
+
+    <div x-show="!loading && rows.length === 0" x-cloak class="p-16 text-center">
+      <p class="text-[13.5px] text-[var(--ink-3)]">No restructures found.</p>
+    </div>
+
+    <table x-show="!loading && rows.length > 0" x-cloak class="w-full">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Loan</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Client</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Type</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Original Balance</th>
+          <th class="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">New Installment</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Status</th>
+          <th class="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono font-medium">Created</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="r in rows" :key="r.id">
+          <tr class="border-t border-[var(--border)] cursor-pointer hover:bg-[var(--cream)] transition" @click="go(r.id)">
+            <td class="px-5 py-3.5 font-mono text-[12.5px]">
+              <div x-text="r.loan_number"></div>
+              <div class="text-[11px] text-[var(--ink-3)]" x-text="r.branch_code || ''"></div>
+            </td>
+            <td class="px-5 py-3.5">
+              <div class="text-[13.5px] font-medium" x-text="r.client_name"></div>
+              <div class="text-[11.5px] text-[var(--ink-3)] font-mono" x-text="r.client_phone"></div>
+            </td>
+            <td class="px-5 py-3.5 text-[12.5px]">
+              <span class="pill pill-info" x-text="prettyType(r.restructure_type)"></span>
+            </td>
+            <td class="px-5 py-3.5 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(r.original_balance)"></td>
+            <td class="px-5 py-3.5 text-right tabular-nums text-[13px] font-mono" x-text="fmtMoney(r.new_installment_amount)"></td>
+            <td class="px-5 py-3.5"><span class="pill" :class="statusPill(r.status)" x-text="prettyStatus(r.status)"></span></td>
+            <td class="px-5 py-3.5 text-[12px] font-mono text-[var(--ink-3)]" x-text="fmtDate(r.created_at)"></td>
+            <td class="px-5 py-3.5 text-[var(--ink-4)]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function restructuresList() {
+  return {
+    rows: [], stats: {},
+    search: '', filterStatus: '', filterType: '',
+    loading: true, error: '',
+    statCards: [
+      { key: 'total',     label: 'Total' },
+      { key: 'proposed',  label: 'Proposed' },
+      { key: 'approved',  label: 'Approved' },
+      { key: 'applied',   label: 'Applied' },
+      { key: 'rejected',  label: 'Rejected' },
+    ],
+
+    async init() { await Promise.all([this.load(), this.loadStats()]); this.loading = false; },
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    async api(url) {
+      const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.getToken() } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    },
+    async load() {
+      this.loading = true;
+      try {
+        const p = new URLSearchParams({ page_size: '200' });
+        if (this.search) p.set('search', this.search);
+        if (this.filterStatus) p.set('status', this.filterStatus);
+        if (this.filterType) p.set('restructure_type', this.filterType);
+        const d = await this.api('/api/restructures/?' + p);
+        this.rows = d.results || d;
+      } catch (e) { this.error = e.message; }
+      finally { this.loading = false; }
+    },
+    async loadStats() {
+      try {
+        // Uses the same list endpoint, filtered server-side
+        const [total, proposed, approved, applied, rejected] = await Promise.all([
+          this.api('/api/restructures/?page_size=1'),
+          this.api('/api/restructures/?status=PROPOSED&page_size=1'),
+          this.api('/api/restructures/?status=APPROVED&page_size=1'),
+          this.api('/api/restructures/?status=APPLIED&page_size=1'),
+          this.api('/api/restructures/?status=REJECTED&page_size=1'),
+        ]);
+        this.stats = {
+          total: total.count ?? (total.results || total).length,
+          proposed: proposed.count ?? (proposed.results || proposed).length,
+          approved: approved.count ?? (approved.results || approved).length,
+          applied: applied.count ?? (applied.results || applied).length,
+          rejected: rejected.count ?? (rejected.results || rejected).length,
+        };
+      } catch (e) { /* non-fatal */ }
+    },
+    go(id) { window.location.href = '/app/restructures/' + id + '/'; },
+    fmtMoney(v) { const n = Number(v || 0); return 'K ' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+    fmtDate(iso) { if (!iso) return '—'; return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); },
+    prettyType(t) { return { EXTEND_TERM: 'Extend Term', REDUCE_AMOUNT: 'Reduce Amount', MORATORIUM: 'Moratorium', REFINANCE: 'Refinance' }[t] || t; },
+    prettyStatus(s) { return { PROPOSED: 'Proposed', APPROVED: 'Approved', REJECTED: 'Rejected', APPLIED: 'Applied', CANCELLED: 'Cancelled' }[s] || s; },
+    statusPill(s) {
+      return { PROPOSED: 'pill-info', APPROVED: 'pill-success', APPLIED: 'pill-success', REJECTED: 'pill-danger', CANCELLED: 'pill-neutral' }[s] || 'pill-neutral';
+    },
+  };
+}
+document.addEventListener('alpine:init', () => Alpine.data('restructuresList', restructuresList));
+</script>
+{% endblock %}

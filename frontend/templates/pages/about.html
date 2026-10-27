@@ -1,0 +1,21 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}{{ page.meta_title|default:page.title }}{% endblock %}
+
+{% block content %}
+<header class="relative overflow-hidden bg-[var(--cream)] noise">
+  <div class="absolute inset-0 bg-grid bg-grid-mask opacity-60 pointer-events-none"></div>
+  <div class="relative max-w-[1280px] mx-auto px-6 pt-24 pb-20 lg:pt-32 lg:pb-28">
+    <div class="max-w-3xl">
+      <div class="eyebrow mb-6">About Us</div>
+      <h1 class="font-display text-[48px] sm:text-[64px] lg:text-[80px] leading-[1.02] text-[var(--ink)]">{{ page.title }}</h1>
+      {% if page.subtitle %}<p class="mt-8 text-[18px] text-[var(--ink-2)] leading-[1.7] max-w-2xl">{{ page.subtitle }}</p>{% endif %}
+    </div>
+  </div>
+</header>
+
+{% for block in blocks %}
+  {% render_block block %}
+{% endfor %}
+{% endblock %}

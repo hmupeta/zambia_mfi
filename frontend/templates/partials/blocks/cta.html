@@ -1,0 +1,17 @@
+<section class="py-24 bg-[#0A0A0A] relative overflow-hidden">
+  <div class="absolute inset-0 bg-grid opacity-[0.05] pointer-events-none"></div>
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] rounded-full opacity-30 pointer-events-none"
+       style="background: radial-gradient(ellipse, var(--accent), transparent 70%); filter: blur(80px);"></div>
+  <div class="relative max-w-[840px] mx-auto px-6 text-center">
+    <h2 class="font-display text-[40px] sm:text-[60px] leading-[1.05] text-white">{{ block.title }}</h2>
+    {% if block.subtitle %}
+    <p class="mt-5 text-[17px] text-[#A1A1AA] max-w-xl mx-auto">{{ block.subtitle }}</p>
+    {% endif %}
+    {% if block.cta_text %}
+    <a href="{{ block.cta_url|default:'#' }}" class="btn-primary mt-10">
+      {{ block.cta_text }}
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+    </a>
+    {% endif %}
+  </div>
+</section>

@@ -1,0 +1,228 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Branch Detail — Nimbus{% endblock %}
+{% block page_title %}Branch Detail{% endblock %}
+
+{% block content %}
+<div x-data="branchDetailPage" x-init="init()" x-cloak>
+{% include "partials/breadcrumbs.html" %}
+
+  <a href="/app/branches/"
+     class="text-[13px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium inline-flex items-center gap-1 mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to branches
+  </a>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="loading" class="text-center py-16 text-[13px] text-[var(--ink-3)]">Loading…</div>
+
+  <template x-if="branch">
+    <div class="space-y-6">
+
+      <!-- Header card -->
+      <div class="card p-6 lg:p-8">
+        <div class="flex items-start gap-5 flex-wrap">
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-mono text-[18px] font-semibold flex-shrink-0"
+               style="background: var(--accent);"
+               x-text="branch.code"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <h2 class="font-display text-[28px] tracking-tight" x-text="branch.name"></h2>
+              <span x-show="branch.is_hq"
+                    class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-mono font-medium uppercase tracking-wider">HQ</span>
+              <span class="pill" :class="branch.is_active ? 'pill-success' : 'pill-neutral'"
+                    x-text="branch.is_active ? 'Active' : 'Inactive'"></span>
+            </div>
+            <p class="mt-2 text-[13.5px] text-[var(--ink-2)]" x-show="branch.physical_address"
+               x-text="branch.physical_address"></p>
+            <div class="mt-2 flex gap-4 text-[12.5px] text-[var(--ink-3)] font-mono flex-wrap">
+              <span x-show="branch.phone">📞 <span x-text="branch.phone"></span></span>
+              <span x-show="branch.parent_branch_code">↳ Parent: <span x-text="branch.parent_branch_code"></span></span>
+            </div>
+          </div>
+          <div class="flex gap-2 flex-shrink-0">
+            <button @click="editHref()"
+                    class="btn-primary !py-2.5 !px-5 !text-[13.5px] !w-auto">
+              Edit Branch
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <template x-if="stats">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Portfolio</p>
+            <p class="text-[22px] font-mono mt-1" x-text="fmtK(stats.kpis.portfolio)"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5">active loan balance</p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active Loans</p>
+            <p class="text-[22px] font-display mt-1" x-text="stats.kpis.active_loans"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5"
+               x-text="stats.kpis.total_loans + ' total in branch'"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Disbursed (all-time)</p>
+            <p class="text-[22px] font-mono mt-1" x-text="fmtK(stats.kpis.disbursed_total)"></p>
+          </div>
+          <div class="card p-4">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Wallet</p>
+            <p class="text-[22px] font-mono mt-1"
+               x-text="stats.kpis.wallet_balance != null ? fmtK(stats.kpis.wallet_balance) : '—'"></p>
+            <p class="text-[11px] text-[var(--ink-3)] mt-0.5"
+               x-show="stats.kpis.wallet_balance == null">not configured</p>
+          </div>
+        </div>
+      </template>
+
+      <!-- Two-column: Staff + Recent activity -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Staff -->
+        <template x-if="stats">
+          <div class="card p-0 overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+              <h3 class="font-display text-[18px] tracking-tight">Staff</h3>
+              <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                    x-text="stats.staff.length + ' active'"></span>
+            </div>
+            <div x-show="stats.staff.length === 0" class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+              No staff assigned to this branch.
+            </div>
+            <div class="divide-y divide-[var(--border)]"
+                 x-show="stats.staff.length > 0">
+              <template x-for="u in stats.staff" :key="u.id">
+                <div class="px-5 py-3 flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0"
+                       x-text="(u.full_name || u.username || '?')[0].toUpperCase()"></div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[13.5px] font-medium truncate" x-text="u.full_name"></p>
+                    <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate"
+                       x-text="'@' + u.username + (u.email ? ' · ' + u.email : '')"></p>
+                  </div>
+                  <span class="pill pill-info flex-shrink-0" x-text="u.role_display || u.role || '—'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Recent journal entries -->
+        <template x-if="stats">
+          <div class="card p-0 overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+              <h3 class="font-display text-[18px] tracking-tight">Recent Journal Entries</h3>
+              <a href="/app/accounting/journal-entries/"
+                 class="text-[12px] text-[var(--accent)] hover:underline">View all →</a>
+            </div>
+            <div x-show="stats.recent_journal_entries.length === 0"
+                 class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+              No journal entries for this branch yet.
+            </div>
+            <div class="divide-y divide-[var(--border)]"
+                 x-show="stats.recent_journal_entries.length > 0">
+              <template x-for="je in stats.recent_journal_entries" :key="je.id">
+                <div class="px-5 py-3">
+                  <div class="flex items-start gap-3">
+                    <span class="font-mono text-[11.5px] text-[var(--ink-3)] w-[88px] flex-shrink-0 mt-0.5"
+                          x-text="fmtDate(je.entry_date)"></span>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[13px] font-medium font-mono truncate" x-text="je.reference"></p>
+                      <p class="text-[12px] text-[var(--ink-2)] truncate mt-0.5"
+                         x-text="je.description || '—'"></p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="pill pill-neutral text-[10px]" x-text="je.source_type"></span>
+                      <span x-show="je.is_reversed"
+                            class="pill pill-danger text-[10px]">Reversed</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function branchDetailPage() {
+  const API = '/api/auth';
+  const BRANCH_ID = '{{ branch_id }}';
+
+  return {
+    branch: null,
+    stats: null,
+    loading: false,
+    error: '',
+
+    async init() { await this.load(); },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders() { return { 'Authorization': 'Bearer ' + this.getToken() }; },
+
+    async load() {
+      this.loading = true;
+      this.error = '';
+      try {
+        const [bRes, sRes] = await Promise.all([
+          fetch(`${API}/branches/${BRANCH_ID}/`, { headers: this.authHeaders() }),
+          fetch(`${API}/branches/${BRANCH_ID}/stats/`, { headers: this.authHeaders() }),
+        ]);
+
+        if (!bRes.ok) throw new Error('Branch not found.');
+        this.branch = await bRes.json();
+
+        if (sRes.ok) {
+          this.stats = await sRes.json();
+        } else {
+          // Non-fatal — page still shows branch header
+          console.warn('stats endpoint failed:', sRes.status);
+          this.stats = {
+            kpis: { portfolio: 0, active_loans: 0, total_loans: 0, disbursed_total: 0, wallet_balance: null },
+            staff: [],
+            recent_journal_entries: [],
+          };
+        }
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    editHref() {
+      // Navigate to the list page with a query param to auto-open the edit modal
+      window.location.href = `/app/branches/?edit=${BRANCH_ID}`;
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('branchDetailPage', branchDetailPage);
+});
+</script>
+{% endblock %}

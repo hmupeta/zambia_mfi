@@ -1,0 +1,29 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+{{ block.super }}
+
+{% if webhook_url %}
+<div style="margin-top: 24px; padding: 16px; background: #FAF7F2; border-radius: 12px; border: 1px solid #E4E4E7;">
+  <h3 style="margin: 0 0 12px 0; font-size: 14px;">Webhook URL for {{ original.provider_code }}</h3>
+  <p style="margin: 0 0 8px 0; font-size: 13px; color: #52525B;">
+    Provide this URL to <strong>{{ original.provider_code }}</strong> during onboarding:
+  </p>
+  <code style="display: block; padding: 10px; background: white; border-radius: 6px; font-size: 12px; word-break: break-all; border: 1px solid #E4E4E7;">
+    {{ webhook_url }}
+  </code>
+</div>
+{% endif %}
+
+{% if field_labels %}
+<div style="margin-top: 16px; padding: 16px; background: #EFF6FF; border-radius: 12px; border: 1px solid #BFDBFE;">
+  <h3 style="margin: 0 0 12px 0; font-size: 14px;">Field guide for {{ original.provider_code }}</h3>
+  <ul style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.7;">
+    {% for field, hint in field_labels.items %}
+      <li><strong>{{ field }}:</strong> {{ hint }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% endblock %}

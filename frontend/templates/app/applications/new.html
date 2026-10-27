@@ -1,0 +1,470 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}New Application — Nimbus{% endblock %}
+{% block page_title %}New Application{% endblock %}
+
+{% block content %}
+<div x-data="newApplication()" x-init="init()" class="max-w-4xl mx-auto">
+
+  <div class="mb-6">
+    <a href="/app/applications/" class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--accent)] inline-flex items-center gap-1">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+      All applications
+    </a>
+  </div>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <form @submit.prevent="submit()">
+
+    <!-- ── Client & product ── -->
+    <div class="card p-6 mb-6">
+      <h3 class="font-display text-[22px] tracking-tight mb-5">Applicant & product</h3>
+
+      <!-- Toggle between existing and new client using strings instead of booleans -->
+      <div class="flex items-center gap-6 mb-5">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" value="existing" x-model="clientMode" class="text-orange-500 focus:ring-orange-500">
+          <span class="text-[14px]">Select Existing Client</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" value="new" x-model="clientMode" class="text-orange-500 focus:ring-orange-500">
+          <span class="text-[14px]">Create New Client</span>
+        </label>
+      </div>
+
+      <!-- Existing Client Dropdown -->
+      <div x-show="clientMode === 'existing'" class="mb-5">
+        <label class="label">Client</label>
+        <select x-model="form.client" class="input" :required="clientMode === 'existing'">
+          <option value="">Select a client…</option>
+          <template x-for="c in clients" :key="c.id">
+            <option :value="c.id"
+                    x-text="c.first_name + ' ' + c.last_name + ' — ' + c.nrc"></option>
+          </template>
+        </select>
+      </div>
+
+      <!-- New Client Fields (Only visible if creating new) -->
+      <div x-show="clientMode === 'new'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5 border-l-4 border-orange-400 pl-4 bg-orange-50/50 py-3 rounded-r-xl">
+        <div class="md:col-span-2">
+          <p class="text-[13px] text-orange-700 font-medium">This will create a new client record before creating the application.</p>
+        </div>
+        <div>
+          <label class="label">First Name</label>
+          <input type="text" x-model="newClient.first_name" class="input" :required="clientMode === 'new'" />
+        </div>
+        <div>
+          <label class="label">Last Name</label>
+          <input type="text" x-model="newClient.last_name" class="input" :required="clientMode === 'new'" />
+        </div>
+        <div>
+          <label class="label">National ID / NRC</label>
+          <input type="text" x-model="newClient.nrc" class="input" :required="clientMode === 'new'" placeholder="e.g. 123456/11/1" />
+        </div>
+        <div>
+          <label class="label">Phone Number</label>
+          <input type="text" x-model="newClient.phone" class="input" :required="clientMode === 'new'" placeholder="e.g. 0971234567" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label class="label">Loan product</label>
+          <select x-model="form.loan_product" @change="onProductChange()" class="input" required>
+            <option value="">Select a product…</option>
+            <template x-for="p in products" :key="p.id">
+              <option :value="p.id" x-text="p.code + ' — ' + p.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label class="label">Loan officer</label>
+          <select x-model="form.loan_officer" class="input">
+            <option value="">(self)</option>
+            <template x-for="o in officers" :key="o.id">
+              <option :value="o.id" x-text="o.username + ' (' + o.role + ')'"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── KYC & Documents ── -->
+    <div class="card p-6 mb-6 border-l-4 border-blue-500">
+      <h3 class="font-display text-[22px] tracking-tight mb-5">KYC & Documents</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label class="label">Borrower Photo</label>
+          <input type="file" accept="image/*" @change="borrowerPhoto = $event.target.files[0]" 
+                 class="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100" />
+          <p class="text-[12px] text-gray-500 mt-1">Take a clear photo of the client's face.</p>
+        </div>
+        <div>
+          <label class="label">National ID / NRC Copy</label>
+          <input type="file" accept="image/*" @change="nrcPhoto = $event.target.files[0]"
+                 class="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100" />
+          <p class="text-[12px] text-gray-500 mt-1">Upload a scanned copy or photo of the NRC.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Requested terms ── -->
+    <div class="card p-6 mb-6">
+      <h3 class="font-display text-[22px] tracking-tight mb-5">Requested terms</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div>
+          <label class="label">Amount (ZMW)</label>
+          <input type="number" x-model="form.requested_amount" class="input" required
+                 min="1" step="0.01" />
+          <p x-show="selectedProduct" class="mt-1.5 text-[12px] text-[var(--ink-3)]"
+             x-text="'Range: K ' + fmtNum(selectedProduct?.min_amount) + ' – K ' + fmtNum(selectedProduct?.max_amount)"></p>
+        </div>
+
+        <div>
+          <label class="label">Tenure (months)</label>
+          <input type="number" x-model="form.requested_tenure_months" class="input"
+                 required min="1" max="60" />
+          <p x-show="selectedProduct" class="mt-1.5 text-[12px] text-[var(--ink-3)]"
+             x-text="'Max: ' + selectedProduct?.max_tenure_months + ' months'"></p>
+        </div>
+
+        <div>
+          <label class="label">Repayment frequency</label>
+          <select x-model="form.requested_repayment_frequency" class="input" required>
+            <option value="WEEKLY">Weekly</option>
+            <option value="BIWEEKLY">Bi-weekly</option>
+            <option value="MONTHLY">Monthly</option>
+            <option value="DAILY">Daily</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="label">Purpose</label>
+          <select x-model="form.purpose" class="input">
+            <option value="BUSINESS_CAPITAL">Business Capital</option>
+            <option value="EQUIPMENT">Equipment Purchase</option>
+            <option value="INVENTORY">Inventory / Stock</option>
+            <option value="AGRICULTURE">Agriculture / Farming</option>
+            <option value="EDUCATION">Education</option>
+            <option value="MEDICAL">Medical</option>
+            <option value="EMERGENCY">Emergency</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="label">Purpose notes</label>
+          <input type="text" x-model="form.purpose_notes" class="input"
+                 placeholder="Brief description" />
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Appraisal ── -->
+    <div class="card p-6 mb-6">
+      <h3 class="font-display text-[22px] tracking-tight mb-5">Appraisal</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div>
+          <label class="label">Monthly income</label>
+          <input type="number" x-model="form.monthly_income" class="input" min="0" step="0.01" />
+        </div>
+        <div>
+          <label class="label">Monthly expenses</label>
+          <input type="number" x-model="form.monthly_expenses" class="input" min="0" step="0.01" />
+        </div>
+        <div>
+          <label class="label">Existing debts</label>
+          <input type="number" x-model="form.existing_debts" class="input" min="0" step="0.01" />
+        </div>
+        <div>
+          <label class="label">Net worth</label>
+          <input type="number" x-model="form.net_worth" class="input" min="0" step="0.01" />
+        </div>
+      </div>
+
+      <div class="mt-5 space-y-5">
+        <div>
+          <label class="label">Collateral summary</label>
+          <textarea x-model="form.collateral_summary" class="input resize-none" rows="2"
+                    placeholder="e.g. Toyota Hilux 2018, valued at K85,000"></textarea>
+        </div>
+        <div>
+          <label class="label">Appraisal notes</label>
+          <textarea x-model="form.appraisal_notes" class="input resize-none" rows="3"
+                    placeholder="Any additional notes for the reviewer"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Guarantors ── -->
+    <div class="card p-6 mb-6">
+      <h3 class="font-display text-[22px] tracking-tight mb-5">Guarantors</h3>
+      <p class="text-[13px] text-[var(--ink-3)] mb-4">Please provide details for exactly 2 guarantors.</p>
+
+      <div class="space-y-6">
+        <!-- Guarantor 1 -->
+        <div class="border border-[var(--border-2)] rounded-xl p-4 bg-gray-50/50">
+          <h4 class="font-medium text-[15px] mb-3 text-orange-700">Guarantor 1</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Full Name</label>
+              <input type="text" x-model="guarantors[0].full_name" class="input" required />
+            </div>
+            <div>
+              <label class="label">Phone Number</label>
+              <input type="text" x-model="guarantors[0].phone_number" class="input" required />
+            </div>
+            <div>
+              <label class="label">National ID / NRC</label>
+              <input type="text" x-model="guarantors[0].nrc" class="input" required />
+            </div>
+            <div>
+              <label class="label">Relationship</label>
+              <input type="text" x-model="guarantors[0].relationship" class="input" placeholder="e.g. Spouse, Brother" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- Guarantor 2 -->
+        <div class="border border-[var(--border-2)] rounded-xl p-4 bg-gray-50/50">
+          <h4 class="font-medium text-[15px] mb-3 text-orange-700">Guarantor 2</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Full Name</label>
+              <input type="text" x-model="guarantors[1].full_name" class="input" required />
+            </div>
+            <div>
+              <label class="label">Phone Number</label>
+              <input type="text" x-model="guarantors[1].phone_number" class="input" required />
+            </div>
+            <div>
+              <label class="label">National ID / NRC</label>
+              <input type="text" x-model="guarantors[1].nrc" class="input" required />
+            </div>
+            <div>
+              <label class="label">Relationship</label>
+              <input type="text" x-model="guarantors[1].relationship" class="input" placeholder="e.g. Colleague, Friend" required />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Actions ── -->
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <p class="text-[13px] text-[var(--ink-3)]">
+        Draft applications can be saved and submitted later.
+      </p>
+      <div class="flex gap-3">
+        <a href="/app/applications/"
+           class="px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+          Cancel
+        </a>
+        <button type="submit" :disabled="saving"
+                class="btn-primary !w-auto !py-2.5 !px-6 !text-[13.5px]">
+          <span x-text="saving ? 'Creating…' : 'Create Application'"></span>
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function newApplication() {
+  return {
+    saving: false,
+    error: '',
+    
+    // Use a string state to prevent Alpine binding glitches
+    clientMode: 'existing', 
+
+    clients: [],
+    products: [],
+    officers: [],
+
+    borrowerPhoto: null,
+    nrcPhoto: null,
+
+    form: {
+      client: '',
+      loan_product: '',
+      loan_officer: '',
+      requested_amount: '',
+      requested_tenure_months: 12,
+      requested_repayment_frequency: 'MONTHLY',
+      purpose: 'BUSINESS_CAPITAL',
+      purpose_notes: '',
+      monthly_income: '',
+      monthly_expenses: '',
+      existing_debts: '',
+      net_worth: '',
+      collateral_summary: '',
+      appraisal_notes: '',
+    },
+
+    newClient: {
+      first_name: '',
+      last_name: '',
+      nrc: '',
+      phone: '',
+    },
+
+    guarantors: [
+      { full_name: '', phone_number: '', nrc: '', relationship: '' },
+      { full_name: '', phone_number: '', nrc: '', relationship: '' }
+    ],
+
+    selectedProduct: null,
+
+    async init() {
+      await Promise.all([this.loadClients(), this.loadProducts(), this.loadOfficers()]);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async fetchList(url) {
+      const r = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + this.getToken() },
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return data.results || data;
+    },
+
+    async loadClients() {
+      this.clients = await this.fetchList('/api/clients/?page_size=500');
+    },
+    async loadProducts() {
+      this.products = (await this.fetchList('/api/loans/products/')).filter(p => p.is_active);
+    },
+    async loadOfficers() {
+      this.officers = await this.fetchList('/api/auth/users/?role=LOAN_OFFICER');
+    },
+
+    onProductChange() {
+      this.selectedProduct = this.products.find(p => p.id === this.form.loan_product) || null;
+    },
+
+    fmtNum(v) { return Number(v || 0).toLocaleString(); },
+
+    async uploadDocument(appId, file, docType) {
+      const formData = new FormData();
+      formData.append('application', appId);
+      formData.append('document_type', docType);
+      formData.append('file', file);
+
+      const res = await fetch('/api/origination/documents/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + this.getToken(),
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        console.error('Failed to upload', docType, await res.text());
+      }
+    },
+
+    async submit() {
+      this.error = '';
+      this.saving = true;
+
+      try {
+        let clientId = this.form.client;
+
+        // 1. Provision new client if needed (Check string value)
+        if (this.clientMode === 'new') {
+          if (!this.newClient.first_name || !this.newClient.last_name || !this.newClient.nrc) {
+            this.error = 'Please fill in all required fields for the new client.';
+            this.saving = false;
+            return;
+          }
+
+          const clientRes = await fetch('/api/clients/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + this.getToken(),
+            },
+            body: JSON.stringify(this.newClient),
+          });
+
+          const clientData = await clientRes.json();
+          if (!clientRes.ok) {
+            const firstErr = Object.values(clientData)[0];
+            this.error = Array.isArray(firstErr) ? firstErr[0] : (clientData.error || 'Could not create client.');
+            this.saving = false;
+            return;
+          }
+          clientId = clientData.id;
+        }
+
+        // 2. Prepare Application payload
+        const payload = { 
+          ...this.form, 
+          client: clientId,
+          guarantors: this.guarantors 
+        };
+
+        ['monthly_income','monthly_expenses','existing_debts','net_worth'].forEach(k => {
+          if (payload[k] === '' || payload[k] == null) payload[k] = '0';
+        });
+        if (!payload.loan_officer) delete payload.loan_officer;
+
+        // 3. Create the Application
+        const r = await fetch('/api/origination/applications/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await r.json();
+        if (!r.ok) {
+          const firstErr = Object.values(data)[0];
+          this.error = Array.isArray(firstErr) ? firstErr[0] : (data.error || data.detail || 'Could not create application.');
+          this.saving = false;
+          return;
+        }
+
+        const newAppId = data.id;
+
+        // 4. Upload Images if selected
+        if (this.borrowerPhoto) {
+          await this.uploadDocument(newAppId, this.borrowerPhoto, 'PHOTO');
+        }
+        if (this.nrcPhoto) {
+          await this.uploadDocument(newAppId, this.nrcPhoto, 'NRC');
+        }
+
+        // 5. Redirect to detail page
+        window.location.href = `/app/applications/${newAppId}/`;
+        
+      } catch (e) {
+        console.error(e);
+        this.error = 'Network error. Please try again.';
+        this.saving = false;
+      }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('newApplication', newApplication);
+});
+</script>
+
+{% endblock %}

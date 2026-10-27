@@ -1,0 +1,945 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Loan — Nimbus{% endblock %}
+{% block page_title %}Loan Detail{% endblock %}
+
+{% block content %}
+<div x-data="loanDetailPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" with x_binding="loan?.loan_number || 'Loan'" %}
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <div x-show="loading && !loan" class="animate-pulse space-y-6">
+    <div class="h-40 rounded-2xl bg-[var(--cream)]"></div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+      <div class="h-24 rounded-2xl bg-[var(--cream)]"></div>
+    </div>
+  </div>
+
+  <template x-if="loan">
+    <div class="space-y-6">
+
+      <!-- Header -->
+      <div class="card p-6 lg:p-8">
+        <div class="flex items-start justify-between gap-6 flex-wrap">
+          <div class="flex items-start gap-5 min-w-0">
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-mono text-[14px] font-semibold flex-shrink-0"
+                 style="background: var(--accent);"
+                 x-text="'#' + (loan.loan_number || '').slice(-4)"></div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-3 flex-wrap">
+                <h2 class="font-display text-[28px] tracking-tight font-mono" x-text="loan.loan_number"></h2>
+                <span class="pill" :class="statusPill(loan.status)" x-text="loan.status_display || loan.status"></span>
+                <span x-show="loan.is_fully_repaid"
+                      class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono font-semibold uppercase tracking-wider">
+                  Fully repaid
+                </span>
+              </div>
+              <div class="mt-2 flex items-center gap-4 text-[13.5px] text-[var(--ink-2)] flex-wrap">
+                <a x-show="loan.client" :href="'/app/clients/' + loan.client + '/'" 
+                   class="flex items-center gap-1.5 hover:text-[var(--accent)] transition font-medium">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                  <span x-text="loan.client_name || 'Client'"></span>
+                  <span class="font-mono text-[11.5px] text-[var(--ink-3)]" x-text="loan.client_code || ''"></span>
+                </a>
+                <span class="font-mono text-[12px] text-[var(--ink-3)]" x-show="loan.branch_code"
+                      x-text="loan.branch_code"></span>
+                <span class="text-[var(--ink-3)]" x-show="loan.product_name"
+                      x-text="'· ' + loan.product_name"></span>
+              </div>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Outstanding Balance</p>
+            <p class="font-display text-[32px] tracking-tight mt-1 tabular-nums"
+               :class="loan.balance_due > 0 ? 'text-[var(--ink)]' : 'text-emerald-700'"
+               x-text="fmtK(loan.balance_due)"></p>
+            <p class="text-[12px] text-[var(--ink-3)] mt-1"
+               x-text="'of ' + fmtK(loan.total_amount_due || loan.amount) + ' total due'"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Principal</p>
+          <p class="text-[22px] font-mono mt-1" x-text="fmtK(loan.amount)"></p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5 font-mono"
+             x-text="'Disbursed: ' + fmtK(loan.disbursed_amount)"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Interest</p>
+          <p class="text-[22px] font-mono mt-1" x-text="fmtK(loan.total_interest)"></p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5 font-mono"
+             x-text="(loan.interest_rate || 0) + '% · ' + (loan.interest_method || '')"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Days Past Due</p>
+          <p class="text-[22px] font-mono mt-1"
+             :class="dpdTextColor(loan.days_past_due)"
+             x-text="loan.days_past_due ?? 0"></p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5 font-mono"
+             x-text="loan.next_due_date ? 'Next: ' + fmtDate(loan.next_due_date) : 'No upcoming due'"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Next Payment</p>
+          <p class="text-[22px] font-mono mt-1"
+             x-text="loan.next_due_amount ? fmtK(loan.next_due_amount) : '—'"></p>
+          <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5 font-mono"
+             x-text="loan.repayment_frequency || ''"></p>
+        </div>
+      </div>
+
+      <!-- ══════ ACTIVE PROMISE BANNER ══════ -->
+      <template x-if="loan.active_promise">
+        <div class="card p-4 border border-amber-200 bg-amber-50 flex items-start gap-4">
+          <div class="p-2 bg-amber-100 rounded-lg shrink-0">
+            <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div>
+            <h4 class="text-[14px] font-medium text-amber-900">Active Promise to Pay</h4>
+            <p class="text-[13px] text-amber-800 mt-1">
+              Client promised to pay <strong class="font-mono" x-text="fmtK(loan.active_promise.amount)"></strong> 
+              by <strong x-text="fmtDate(loan.active_promise.date)"></strong>.
+            </p>
+            <p x-show="loan.active_promise.notes" class="text-[12px] text-amber-700 mt-1 italic" x-text="loan.active_promise.notes"></p>
+          </div>
+        </div>
+      </template>
+      <!-- ══════ /ACTIVE PROMISE BANNER ══════ -->
+
+      <!-- Main grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- LEFT COLUMN -->
+        <div class="lg:col-span-2 space-y-6">
+
+          <div class="card p-0 overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+              <h3 class="font-display text-[18px] tracking-tight">Repayment Schedule</h3>
+              <div class="flex items-center gap-3">
+                <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                      x-text="installments.length + ' installments'"></span>
+                <template x-if="installments.length">
+                  <span class="text-[11px] font-mono text-emerald-700">
+                    <span x-text="paidCount"></span> paid
+                  </span>
+                </template>
+              </div>
+            </div>
+            <div x-show="installments.length === 0" class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+              No schedule generated for this loan yet.
+            </div>
+            <div x-show="installments.length > 0" class="overflow-x-auto">
+              <table class="w-full text-[13px]">
+                <thead class="border-b border-[var(--border)]">
+                  <tr class="text-left text-[10.5px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+                    <th class="px-3 py-2.5 font-medium">#</th>
+                    <th class="px-3 py-2.5 font-medium">Due Date</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Principal</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Interest</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Total</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Paid</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Remaining</th>
+                    <th class="px-3 py-2.5 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--border)]">
+                  <template x-for="i in installments" :key="i.id">
+                    <tr class="hover:bg-[var(--cream)] transition"
+                        :class="i.is_overdue && 'bg-red-50/40'">
+                      <td class="px-3 py-2.5 font-mono text-[12px]" x-text="i.installment_no"></td>
+                      <td class="px-3 py-2.5 font-mono text-[12px]" x-text="fmtDate(i.due_date)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]" x-text="fmtK(i.principal_amount)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]" x-text="fmtK(i.interest_amount)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono font-medium" x-text="fmtK(i.total_due)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px] text-emerald-700"
+                          x-text="fmtK(i.paid_amount)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]"
+                          :class="i.remaining > 0 ? 'text-[var(--ink)]' : 'text-[var(--ink-3)]'"
+                          x-text="fmtK(i.remaining)"></td>
+                      <td class="px-3 py-2.5">
+                        <span class="pill text-[10px]"
+                              :class="i.is_paid ? 'pill-success'
+                                      : (i.is_overdue ? 'pill-danger' : 'pill-neutral')"
+                              x-text="i.is_paid ? 'Paid' : (i.is_overdue ? 'Overdue' : 'Pending')"></span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+                <tfoot class="border-t-2 border-[var(--border)] bg-[var(--cream)]">
+                  <tr class="text-[12px] font-medium">
+                    <td colspan="4" class="px-3 py-3 text-right text-[var(--ink-3)] font-mono uppercase tracking-wider text-[10.5px]">Totals</td>
+                    <td class="px-3 py-3 text-right font-mono" x-text="fmtK(scheduleTotal.total_due)"></td>
+                    <td class="px-3 py-3 text-right font-mono text-emerald-700" x-text="fmtK(scheduleTotal.paid)"></td>
+                    <td class="px-3 py-3 text-right font-mono" x-text="fmtK(scheduleTotal.remaining)"></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="card p-0 overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+              <h3 class="font-display text-[18px] tracking-tight">Payment History</h3>
+              <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                    x-text="payments.length + ' payments'"></span>
+            </div>
+            <div x-show="!payments.length" class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+              No payments recorded against this loan yet.
+            </div>
+            <div x-show="payments.length > 0" class="divide-y divide-[var(--border)]">
+              <template x-for="p in payments" :key="p.id">
+                <div class="px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-[var(--cream)] transition"
+                     @click="window.location.href = '/app/payments/' + p.id + '/'">
+                  <span class="font-mono text-[11.5px] text-[var(--ink-3)] w-[88px] flex-shrink-0"
+                        x-text="fmtDate(p.received_at)"></span>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[13px] font-medium truncate"
+                       x-text="p.payment_number || p.transaction_ref || 'Payment'"></p>
+                    <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate"
+                       x-text="p.payment_method || ''"></p>
+                  </div>
+                  <p class="font-mono font-medium text-emerald-700 flex-shrink-0"
+                     x-text="'+ ' + fmtK(p.amount)"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="space-y-6">
+
+          <div class="card p-5">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Loan Details</h3>
+            <dl class="space-y-2.5 text-[13px]">
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Product</dt>
+                <dd class="text-right font-medium" x-text="loan.product_name || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Loan Officer</dt>
+                <dd class="text-right" x-text="loan.officer_name || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Start Date</dt>
+                <dd class="text-right font-mono" x-text="fmtDate(loan.start_date)"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Maturity</dt>
+                <dd class="text-right font-mono" x-text="fmtDate(loan.maturity_date)"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Repayment</dt>
+                <dd class="text-right font-mono text-[12px]" x-text="loan.repayment_frequency || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Interest Rate</dt>
+                <dd class="text-right font-mono" x-text="(loan.interest_rate || 0) + '%'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]"
+                   x-show="loan.total_penalties > 0">
+                <dt class="text-[var(--ink-3)]">Penalties</dt>
+                <dd class="text-right font-mono text-red-700" x-text="fmtK(loan.total_penalties)"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1" x-show="loan.disbursement_channel">
+                <dt class="text-[var(--ink-3)]">Channel</dt>
+                <dd class="text-right font-mono text-[12px]"
+                    x-text="loan.disbursement_channel + (loan.disbursement_ref ? ' · ' + loan.disbursement_ref : '')"></dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="card p-5" x-show="loan.client">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Client</h3>
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-[14px] font-semibold flex-shrink-0"
+                   style="background: var(--accent);"
+                   x-text="(loan.client_name || '?')[0].toUpperCase()"></div>
+              <div class="min-w-0">
+                <p class="text-[14px] font-medium truncate" x-text="loan.client_name || '—'"></p>
+                <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate" x-text="loan.client_code || ''"></p>
+              </div>
+            </div>
+            <a :href="'/app/clients/' + loan.client + '/'"
+               class="text-[12.5px] text-[var(--accent)] hover:underline font-medium">
+              View full client profile →
+            </a>
+          </div>
+
+          <div class="card p-5">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Actions</h3>
+
+            <template x-if="['APPROVED', 'PENDING', 'DRAFT'].includes(loan.status)">
+              <div class="space-y-3">
+                <div class="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <p class="text-[12.5px] text-blue-800">
+                    Ready to disburse. Posts
+                    <span class="font-mono">DR 1100 Loans Receivable / CR 1020 Bank</span>.
+                  </p>
+                </div>
+                <button @click="openAction('disburse')"
+                        class="btn-primary w-full !py-2.5 !text-[13.5px]">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                  </svg>
+                  Disburse Loan
+                </button>
+                <button @click="openAction('restructure')" 
+                        class="!w-auto px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+                  Restructure
+                </button>
+              </div>
+            </template>
+
+            <template x-if="['ACTIVE', 'DISBURSED'].includes(loan.status)">
+              <div class="space-y-2">
+                <button @click="openPayment()"
+                        class="w-full text-left px-4 py-3 rounded-lg border border-emerald-200 hover:bg-emerald-50 transition">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-100 flex-shrink-0">
+                      <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="text-[13.5px] font-medium text-emerald-900">Record Payment</p>
+                      <p class="text-[11.5px] text-emerald-700 mt-0.5">Log a repayment against this loan</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button @click="openAction('restructure')"
+                        class="w-full text-left px-4 py-3 rounded-lg border border-[var(--border)] hover:bg-[var(--cream)] transition">
+                  <p class="text-[13.5px] font-medium">Restructure Loan</p>
+                  <p class="text-[11.5px] text-[var(--ink-3)] mt-0.5">Adjust terms for an existing loan</p>
+                </button>
+                <button @click="openAction('write_off')"
+                        class="w-full text-left px-4 py-3 rounded-lg border border-red-200 hover:bg-red-50 transition">
+                  <p class="text-[13.5px] font-medium text-red-700">Write Off</p>
+                  <p class="text-[11.5px] text-red-500/80 mt-0.5">Mark as uncollectable</p>
+                </button>
+              </div>
+            </template>
+
+            <template x-if="loan.is_fully_repaid || loan.status === 'CLOSED'">
+              <div class="text-center py-4">
+                <div class="w-10 h-10 rounded-full bg-emerald-100 mx-auto flex items-center justify-center mb-2">
+                  <svg class="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <p class="text-[13px] text-[var(--ink-2)]">Fully repaid.</p>
+                <p x-show="loan.closed_at" class="text-[11.5px] text-[var(--ink-3)] font-mono mt-1"
+                   x-text="'Closed ' + fmtDate(loan.closed_at)"></p>
+              </div>
+            </template>
+
+            <template x-if="loan.status === 'WRITTEN_OFF'">
+              <div class="text-center py-4">
+                <p class="text-[13px] text-red-700">This loan has been written off.</p>
+              </div>
+            </template>
+          </div>
+
+          <div class="card p-5">
+            <h3 class="font-display text-[16px] tracking-tight mb-3">Record</h3>
+            <dl class="space-y-2 text-[12.5px]">
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--ink-3)]">Created</dt>
+                <dd class="font-mono text-right" x-text="fmtDate(loan.created_at)"></dd>
+              </div>
+              <div class="flex justify-between gap-3" x-show="loan.updated_at">
+                <dt class="text-[var(--ink-3)]">Updated</dt>
+                <dd class="font-mono text-right" x-text="fmtDate(loan.updated_at)"></dd>
+              </div>
+              <div class="flex justify-between gap-3" x-show="loan.journal_ref">
+                <dt class="text-[var(--ink-3)]">Disbursement JE</dt>
+                <dd class="font-mono text-right text-[11.5px]" x-text="loan.journal_ref"></dd>
+              </div>
+              <div class="flex justify-between gap-3" x-show="loan.application_ref">
+                <dt class="text-[var(--ink-3)]">Application</dt>
+                <dd class="font-mono text-right text-[11.5px]" x-text="loan.application_ref"></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Action modal (Disburse / Restructure / Write-off) -->
+  <div x-show="modal" x-cloak
+       @keydown.escape.window="closeModal()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="closeModal()"
+         class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <h3 class="font-display text-[20px] tracking-tight" x-text="modalTitle"></h3>
+        <button @click="closeModal()" class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto">
+        <template x-if="modal === 'disburse'">
+          <div class="space-y-4">
+            <div class="p-3 rounded-lg bg-blue-50 border border-blue-200 text-[13px] text-blue-800">
+              Disbursing <span class="font-mono font-medium" x-text="loan?.loan_number"></span> —
+              <span class="font-mono font-medium" x-text="fmtK(form.amount)"></span>
+            </div>
+            <div>
+              <label class="label">Amount <span class="text-red-500">*</span></label>
+              <input type="number" step="0.01" min="0.01" x-model="form.amount"
+                     :max="loan?.amount" class="input font-mono" />
+            </div>
+            <div>
+              <label class="label">Date <span class="text-red-500">*</span></label>
+              <input type="date" x-model="form.date" class="input" />
+            </div>
+            <div>
+              <label class="label">Channel <span class="text-red-500">*</span></label>
+              <select x-model="form.channel" class="input">
+                <option value="BANK">Bank Transfer</option>
+                <option value="CASH">Cash</option>
+                <option value="MTN_MOMO">MTN Mobile Money</option>
+                <option value="AIRTEL_MONEY">Airtel Money</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Reference <span class="text-[11px] text-[var(--ink-3)]">(optional)</span></label>
+              <input type="text" x-model="form.reference" class="input font-mono" />
+            </div>
+          </div>
+        </template>
+
+        <!-- 3-Step Restructure Wizard -->
+        <template x-if="modal === 'restructure'">
+          <div class="space-y-6">
+            
+            <!-- Step 1: Breakdown -->
+            <div class="space-y-3">
+              <h4 class="text-[14px] font-medium text-[var(--ink)]">1. Current Arrears</h4>
+              <div class="bg-[var(--cream)] p-4 rounded-xl border border-[var(--border)] space-y-2 text-[13px]">
+                <div class="flex justify-between">
+                  <span class="text-[var(--ink-2)]">Outstanding Balance:</span>
+                  <span class="font-mono font-medium text-red-600" x-text="fmtK(loan?.balance_due)"></span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-[var(--ink-2)]">Unpaid Installments:</span>
+                  <span class="font-mono font-medium" x-text="installments.filter(i => !i.is_paid).length + ' remaining'"></span>
+                </div>
+              </div>
+              <p class="text-[11.5px] text-[var(--ink-3)] italic">
+                * All outstanding arrears and penalties will be capitalized into the new principal.
+              </p>
+            </div>
+
+            <!-- Step 2: New Terms -->
+            <div class="space-y-3 pt-4 border-t border-[var(--border)]">
+              <h4 class="text-[14px] font-medium text-[var(--ink)]">2. New Terms</h4>
+              <div>
+                <label class="label">New Term (Months) <span class="text-red-500">*</span></label>
+                <input type="number" min="1" max="60" x-model="form.new_term_months" class="input font-mono" />
+              </div>
+              <div>
+                <label class="label">Reason for Restructure <span class="text-red-500">*</span></label>
+                <textarea x-model="form.reason" rows="2" class="input" placeholder="e.g. Crop failure, business downturn..."></textarea>
+              </div>
+            </div>
+
+            <!-- Step 3: Preview -->
+            <div class="space-y-3 pt-4 border-t border-[var(--border)]">
+              <h4 class="text-[14px] font-medium text-[var(--ink)]">3. Schedule Preview</h4>
+              <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-2 text-[13px]">
+                <div class="flex justify-between">
+                  <span class="text-blue-800">New Principal:</span>
+                  <span class="font-mono font-medium text-blue-900" x-text="fmtK(loan?.balance_due)"></span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-blue-800">Estimated Total Interest:</span>
+                  <span class="font-mono font-medium text-blue-900" x-text="fmtK(previewRestructureInterest)"></span>
+                </div>
+                <div class="flex justify-between border-t border-blue-200 pt-2 mt-2">
+                  <span class="text-blue-800 font-medium">Total Amount Due:</span>
+                  <span class="font-mono font-bold text-blue-900" x-text="fmtK(Number(loan?.balance_due) + previewRestructureInterest)"></span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </template>
+
+        <template x-if="modal === 'write_off'">
+          <div class="space-y-4">
+            <div class="p-3 rounded-lg bg-red-50 border border-red-200">
+              <p class="text-[13px] text-red-800">
+                Writing off <span class="font-mono font-medium" x-text="loan?.loan_number"></span> will post the
+                outstanding balance of <span class="font-mono font-medium" x-text="fmtK(loan?.balance_due)"></span>
+                as a bad debt loss.
+              </p>
+            </div>
+            <div>
+              <label class="label">Reason <span class="text-red-500">*</span></label>
+              <textarea x-model="form.reason" rows="3" class="input" required></textarea>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="modalError" x-cloak
+             class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="modalError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="closeModal()" :disabled="saving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">
+          Cancel
+        </button>
+        <button @click="submitAction()" :disabled="saving"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="saving ? 'Working…' : 'Confirm'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Record Payment Modal -->
+  <div x-show="paymentModal" x-cloak
+       @keydown.escape.window="closePayment()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="closePayment()"
+         class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <div>
+          <h3 class="font-display text-[20px] tracking-tight">Record Payment</h3>
+          <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5"
+             x-text="'For ' + (loan?.loan_number || '') + ' · Outstanding ' + fmtK(loan?.balance_due)"></p>
+        </div>
+        <button @click="closePayment()"
+                class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label">Amount (ZMW) <span class="text-red-500">*</span></label>
+            <input type="number" step="0.01" min="0.01"
+                   x-model="paymentForm.amount"
+                   @input.debounce.400ms="previewPayment()"
+                   class="input font-mono" />
+          </div>
+          <div>
+            <label class="label">Method <span class="text-red-500">*</span></label>
+            <select x-model="paymentForm.payment_method" class="input">
+              <option value="CASH">Cash</option>
+              <option value="MTN_MOMO">MTN Mobile Money</option>
+              <option value="AIRTEL_MONEY">Airtel Money</option>
+              <option value="BANK">Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Transaction Reference</label>
+          <input type="text" x-model="paymentForm.transaction_ref" class="input font-mono"
+                 placeholder="Optional — e.g. TXN-12345" />
+        </div>
+
+        <div>
+          <label class="label">Notes</label>
+          <textarea x-model="paymentForm.notes" rows="2" class="input" placeholder="Optional"></textarea>
+        </div>
+
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" @click="paymentForm.amount = loan?.balance_due || ''; previewPayment()"
+                  class="text-[12px] px-3 py-1.5 rounded-lg bg-[var(--cream)] border border-[var(--border)] hover:border-[var(--border-2)] transition">
+            Full balance
+          </button>
+          <button type="button" @click="setNextInstallment()"
+                  class="text-[12px] px-3 py-1.5 rounded-lg bg-[var(--cream)] border border-[var(--border)] hover:border-[var(--border-2)] transition">
+            Next installment
+          </button>
+        </div>
+
+        <!-- Allocation preview — uses x-if so children aren't evaluated when null -->
+        <template x-if="paymentPreview && paymentPreview.plan && paymentPreview.plan.length">
+          <div class="card p-4 bg-[var(--cream)] !border-0">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-[13px] font-medium">Allocation Preview</h4>
+              <span class="text-[11.5px] font-mono"
+                    :class="paymentPreview.unallocated > 0 ? 'text-amber-700' : 'text-emerald-700'">
+                <span x-text="fmtK(paymentPreview.allocated)"></span> allocated
+                <span x-show="paymentPreview.unallocated > 0">
+                  · <span x-text="fmtK(paymentPreview.unallocated)"></span> unallocated
+                </span>
+              </span>
+            </div>
+            <table class="w-full text-[11.5px]">
+              <thead>
+                <tr class="text-left text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-mono border-b border-[var(--border)]">
+                  <th class="py-1 font-medium">#</th>
+                  <th class="py-1 font-medium text-right">Penalty</th>
+                  <th class="py-1 font-medium text-right">Interest</th>
+                  <th class="py-1 font-medium text-right">Principal</th>
+                  <th class="py-1 font-medium text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="row in paymentPreview.plan" :key="row.installment_id">
+                  <tr class="border-b border-[var(--border)] last:border-0">
+                    <td class="py-1 font-mono" x-text="'#' + row.installment_no"></td>
+                    <td class="py-1 text-right font-mono" x-text="row.penalty > 0 ? fmtK(row.penalty) : '—'"></td>
+                    <td class="py-1 text-right font-mono" x-text="row.interest > 0 ? fmtK(row.interest) : '—'"></td>
+                    <td class="py-1 text-right font-mono" x-text="row.principal > 0 ? fmtK(row.principal) : '—'"></td>
+                    <td class="py-1 text-right font-mono font-medium" x-text="fmtK(row.subtotal)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <div x-show="paymentError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="paymentError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="closePayment()" :disabled="paymentSaving"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">
+          Cancel
+        </button>
+        <button @click="submitPayment()"
+                :disabled="paymentSaving || !paymentForm.amount"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto">
+          <span x-text="paymentSaving ? 'Recording…' : 'Record Payment'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function loanDetailPage() {
+  const API = '/api/loans/admin';
+  const LOAN_ID = '{{ loan_id }}';
+
+  return {
+    loan: null,
+    installments: [],
+    payments: [],
+    loading: false,
+    error: '',
+    message: '',
+    messageType: 'success',
+
+    modal: null,
+    modalError: '',
+    saving: false,
+    form: {
+      new_balance: '', new_maturity_date: '', reason: '',
+      new_term_months: '3', // <--- ADDED for Restructure
+      amount: '', date: '', channel: 'BANK', reference: '',
+    },
+
+    paymentModal: false,
+    paymentSaving: false,
+    paymentError: '',
+    paymentPreview: null,
+    paymentForm: {
+      amount: '',
+      payment_method: 'CASH',
+      transaction_ref: '',
+      notes: '',
+    },
+
+    async init() {
+      await Promise.all([this.loadLoan(), this.loadPayments()]);
+    },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + this.getToken(), ...extra }; },
+
+    async loadLoan() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/${LOAN_ID}/`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load loan');
+        this.loan = await r.json();
+        this.installments = this.loan.installments || [];
+        this.form.new_balance = this.loan.balance_due || '';
+        this.form.new_maturity_date = this.loan.maturity_date || '';
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadPayments() {
+      try {
+        const r = await fetch(
+          `/api/payments/admin/?loan=${LOAN_ID}&ordering=-received_at&page_size=20`,
+          { headers: this.authHeaders() }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          this.payments = d.results || d;
+        }
+      } catch (_) {}
+    },
+
+    get paidCount() {
+      return this.installments.filter(i => i.is_paid).length;
+    },
+
+    get scheduleTotal() {
+      return this.installments.reduce((acc, i) => ({
+        total_due: acc.total_due + Number(i.total_due || 0),
+        paid: acc.paid + Number(i.paid_amount || 0),
+        remaining: acc.remaining + Number(i.remaining || 0),
+      }), { total_due: 0, paid: 0, remaining: 0 });
+    },
+
+    get previewRestructureInterest() {
+      if (!this.loan || !this.form.new_term_months) return 0;
+      const principal = parseFloat(this.loan.balance_due) || 0;
+      const rate = parseFloat(this.loan.interest_rate) || 0;
+      const months = parseFloat(this.form.new_term_months) || 0;
+      // Simple interest calculation for preview
+      return principal * (rate / 100) * (months / 12);
+    },
+
+    get modalTitle() {
+      return {
+        disburse:    'Disburse Loan',
+        restructure: 'Restructure Loan',
+        write_off:   'Write Off Loan',
+      }[this.modal] || '';
+    },
+
+    openAction(kind) {
+      this.modal = kind;
+      this.modalError = '';
+      const today = new Date().toISOString().slice(0, 10);
+      this.form = {
+        new_balance: this.loan?.balance_due || '',
+        new_maturity_date: this.loan?.maturity_date || '',
+        new_term_months: '3',
+        reason: '',
+        amount: this.loan?.amount || '',
+        date: today,
+        channel: 'BANK',
+        reference: '',
+      };
+    },
+
+    closeModal() { this.modal = null; this.modalError = ''; },
+
+    async submitAction() {
+      this.saving = true;
+      this.modalError = '';
+      try {
+        let url, payload;
+
+        if (this.modal === 'disburse') {
+          if (!this.form.amount || Number(this.form.amount) <= 0) throw new Error('Amount required.');
+          url = `${API}/${LOAN_ID}/disburse/`;
+          payload = {
+            amount: this.form.amount, date: this.form.date,
+            channel: this.form.channel, reference: this.form.reference,
+          };
+        } else if (this.modal === 'restructure') {
+          if (!this.form.reason.trim() || !this.form.new_term_months) {
+            throw new Error('Reason and new term length are required.');
+          }
+          url = `${API}/${LOAN_ID}/restructure/`;
+          payload = {
+            new_term_months: parseInt(this.form.new_term_months),
+            reason: this.form.reason,
+          };
+        } else if (this.modal === 'write_off') {
+          if (!this.form.reason.trim()) throw new Error('Reason required.');
+          url = `${API}/${LOAN_ID}/write_off/`;
+          payload = { reason: this.form.reason };
+        } else {
+          throw new Error('Unknown action.');
+        }
+
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || err.detail || 'Action failed');
+        }
+
+        const verb = { disburse: 'disbursed', restructure: 'restructured', write_off: 'written off' }[this.modal];
+        this.modal = null;
+        this.flash(`Loan ${verb} successfully.`);
+        await this.loadLoan();
+      } catch (e) {
+        this.modalError = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    openPayment() {
+      this.paymentModal = true;
+      this.paymentError = '';
+      this.paymentPreview = null;
+      this.paymentForm = {
+        amount: '',
+        payment_method: 'CASH',
+        transaction_ref: '',
+        notes: '',
+      };
+    },
+
+    closePayment() {
+      this.paymentModal = false;
+      this.paymentError = '';
+      this.paymentPreview = null;
+    },
+
+    setNextInstallment() {
+      const next = this.installments.find(i => !i.is_paid);
+      if (!next) return;
+      const remaining = (parseFloat(next.total_due) || 0) - (parseFloat(next.paid_amount) || 0);
+      this.paymentForm.amount = remaining.toFixed(2);
+      this.previewPayment();
+    },
+
+    async previewPayment() {
+      const amount = parseFloat(this.paymentForm.amount);
+      if (!amount || amount <= 0 || !this.loan?.id) {
+        this.paymentPreview = null;
+        return;
+      }
+      try {
+        const r = await fetch(
+          `/api/payments/admin/preview/?loan=${this.loan.id}&amount=${amount}`,
+          { headers: this.authHeaders() }
+        );
+        if (r.ok) this.paymentPreview = await r.json();
+      } catch (_) {}
+    },
+
+    async submitPayment() {
+      this.paymentSaving = true;
+      this.paymentError = '';
+      try {
+        const amount = parseFloat(this.paymentForm.amount);
+        if (!amount || amount <= 0) throw new Error('Enter an amount greater than zero.');
+
+        const r = await fetch('/api/payments/admin/', {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            loan: this.loan.id,
+            amount: amount,
+            payment_method: this.paymentForm.payment_method,
+            payment_type: 'INSTALLMENT',
+            transaction_ref: this.paymentForm.transaction_ref,
+            notes: this.paymentForm.notes,
+          }),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          const msg = err.error || err.detail
+            || Object.entries(err).map(([k, v]) =>
+                 `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
+               ).join(' · ')
+            || 'Payment failed.';
+          throw new Error(msg);
+        }
+
+        this.paymentModal = false;
+        this.flash('Payment recorded successfully.');
+        await Promise.all([this.loadLoan(), this.loadPayments()]);
+      } catch (e) {
+        this.paymentError = e.message;
+      } finally {
+        this.paymentSaving = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    statusPill(s) {
+      return {
+        ACTIVE: 'pill-success', DISBURSED: 'pill-info', CURRENT: 'pill-success',
+        IN_ARREARS: 'pill-warning', DEFAULTED: 'pill-danger',
+        CLOSED: 'pill-neutral', WRITTEN_OFF: 'pill-danger',
+        RESTRUCTURED: 'pill-warning', PENDING: 'pill-neutral', APPROVED: 'pill-info',
+        DRAFT: 'pill-neutral',
+      }[s] || 'pill-neutral';
+    },
+
+    dpdTextColor(dpd) {
+      const n = Number(dpd || 0);
+      if (n === 0) return 'text-emerald-700';
+      if (n <= 30) return 'text-amber-700';
+      if (n <= 90) return 'text-orange-700';
+      return 'text-red-700';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+      catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('loanDetailPage', loanDetailPage);
+});
+</script>
+{% endblock %}

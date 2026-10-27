@@ -1,0 +1,220 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Sign in — Nimbus Investment Ltd{% endblock %}
+
+{% block form %}
+<div>
+  <h1 class="font-display text-[38px] sm:text-[44px] leading-[1.05] tracking-tight">Welcome back</h1>
+  <p class="mt-3 text-[15px] text-[var(--ink-2)]">Sign in to your account to continue.</p>
+</div>
+
+<!-- Server-side errors (query string) and client-side errors share this box -->
+<div id="error" class="hidden mt-6 error-box"></div>
+
+{% if error %}
+  <script>
+    window.__SERVER_ERROR__ = "{{ error|escapejs }}";
+  </script>
+{% endif %}
+
+<form id="login-form" class="mt-8 space-y-5" autocomplete="on">
+  <div>
+    <label for="username" class="label">Username or email</label>
+    <input
+      type="text"
+      id="username"
+      name="username"
+      class="input"
+      placeholder="you@company.zm"
+      required
+      autocomplete="username"
+      autofocus
+    />
+  </div>
+
+  <div>
+    <div class="flex items-center justify-between mb-2">
+      <label for="password" class="label !mb-0">Password</label>
+      <a href="/forgot-password/" class="text-[13px] font-medium text-[var(--accent)] hover:underline">Forgot password?</a>
+    </div>
+    <div class="relative">
+      <input
+        type="password"
+        id="password"
+        name="password"
+        class="input pr-12"
+        placeholder="Enter your password"
+        required
+        autocomplete="current-password"
+      />
+      <button
+        type="button"
+        id="toggle-password"
+        class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)] hover:text-[var(--ink)] p-1"
+        aria-label="Show password"
+      >
+        <svg id="eye-show" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        <svg id="eye-hide" class="h-5 w-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <label class="flex items-center gap-3 text-[14px] text-[var(--ink-2)] select-none cursor-pointer">
+    <input type="checkbox" id="remember" class="w-4 h-4 rounded border-[var(--border-2)] text-[var(--accent)] focus:ring-[var(--accent)]" />
+    <span>Keep me signed in on this device</span>
+  </label>
+
+  <button type="submit" id="submit-btn" class="btn-primary">
+    <span id="submit-text">Sign in</span>
+    <svg id="submit-spinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+    </svg>
+  </button>
+</form>
+
+<div class="mt-8 pt-8 border-t border-[var(--border)] text-center">
+  <p class="text-[14px] text-[var(--ink-2)]">
+    Don't have an account?
+    <a href="/signup/" class="font-medium text-[var(--accent)] hover:underline">Create one</a>
+  </p>
+</div>
+
+<div class="mt-10 text-center text-[12px] text-[var(--ink-3)] font-mono">
+  Demo: <span class="text-[var(--ink-2)]">acme-mfi-admin</span> · <span class="text-[var(--ink-2)]">TenantAdmin@2026</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const form      = document.getElementById('login-form');
+  const errorBox  = document.getElementById('error');
+  const btn       = document.getElementById('submit-btn');
+  const btnText   = document.getElementById('submit-text');
+  const spinner   = document.getElementById('submit-spinner');
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.remove('hidden');
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function setLoading(loading) {
+    btn.disabled = loading;
+    btnText.textContent = loading ? 'Signing in…' : 'Sign in';
+    spinner.classList.toggle('hidden', !loading);
+  }
+
+  // ── Server-side error (redirected back with ?error=...) ──────
+  const serverMessages = {
+    invalid:       'Invalid username or password.',
+    org_inactive:  'Your account is pending verification of your Bank of Zambia licence. '
+                 + 'You will be notified by email once your organization has been activated.',
+    org_suspended: 'Your organization has been suspended. Please contact support.',
+  };
+  if (window.__SERVER_ERROR__ && serverMessages[window.__SERVER_ERROR__]) {
+    showError(serverMessages[window.__SERVER_ERROR__]);
+  }
+
+  // ── Password visibility toggle ──────────────────────────────
+  document.getElementById('toggle-password').addEventListener('click', () => {
+    const pw   = document.getElementById('password');
+    const show = document.getElementById('eye-show');
+    const hide = document.getElementById('eye-hide');
+    const isPw = pw.type === 'password';
+    pw.type = isPw ? 'text' : 'password';
+    show.classList.toggle('hidden', isPw);
+    hide.classList.toggle('hidden', !isPw);
+  });
+
+  // ── Instant redirect if a token already exists ──────────────
+  (function () {
+    const existing = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    if (existing) {
+      window.location.href = '/app/';
+    }
+  })();
+
+  // ── Submit ──────────────────────────────────────────────────
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.classList.add('hidden');
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const remember = document.getElementById('remember').checked;
+
+    if (!username || !password) {
+      showError('Please enter your username and password.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const r = await fetch('/api/auth/token/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      // ── Error handling ──────────────────────────────────────
+      if (!r.ok) {
+        let detail = {};
+        try { detail = await r.json(); } catch (_) { /* not JSON */ }
+
+        if (r.status === 401) {
+          showError('Invalid username or password.');
+        } else if (r.status === 403) {
+          // Backend blocks inactive or suspended orgs with a `code` field
+          if (detail.code === 'ORG_PENDING_VERIFICATION') {
+            showError('Your account is pending verification of your Bank of Zambia licence. '
+                    + 'You will be notified by email once your organization has been activated.');
+          } else if (detail.code === 'ORG_SUSPENDED') {
+            showError('Your organization has been suspended. Please contact support.');
+          } else {
+            showError(detail.detail || 'Access denied.');
+          }
+        } else if (r.status === 429) {
+          showError('Too many attempts. Please wait a moment.');
+        } else {
+          showError(detail.detail || 'Sign in failed. Please try again.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      const data = await r.json();
+
+      // ── Persist tokens ──────────────────────────────────────
+      const store = remember ? localStorage : sessionStorage;
+      const clearOther = remember ? sessionStorage : localStorage;
+      clearOther.removeItem('access_token');
+      clearOther.removeItem('refresh_token');
+      store.setItem('access_token',  data.access);
+      store.setItem('refresh_token', data.refresh);
+
+      // ── Agreement gate ──────────────────────────────────────
+      // Backend sets `needs_agreement: true` when the org has unsigned
+      // active legal documents.
+      if (data.needs_agreement) {
+        window.location.href = '/sign-agreement/';
+      } else {
+        window.location.href = '/app/';
+      }
+
+    } catch (err) {
+      console.error(err);
+      showError('Network error. Please check your connection.');
+      setLoading(false);
+    }
+  });
+})();
+</script>
+{% endblock %}

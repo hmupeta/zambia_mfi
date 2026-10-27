@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@source "../../../frontend/templates";
+@source "../../templates";
+@source "../../apps";
+@source "../../../frontend/static/js";
+@source "../../static/js";
+
+@theme {
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}

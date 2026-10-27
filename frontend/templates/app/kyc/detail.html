@@ -1,0 +1,785 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}KYC Verification — Nimbus{% endblock %}
+{% block page_title %}KYC Verification{% endblock %}
+
+{% block content %}
+<div x-data="kycDetail('{{ verification_id }}')" x-init="init()">
+
+  <!-- ══════ Breadcrumbs ══════ -->
+{% include "partials/breadcrumbs.html" %}
+
+  <div class="mb-6">
+    <a href="/app/kyc/"
+       class="inline-flex items-center gap-2 text-[13.5px] text-[var(--ink-2)] hover:text-[var(--accent)] transition group">
+      <svg class="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+      All verifications
+    </a>
+  </div>
+
+  <div x-show="loading" class="animate-pulse">
+    <div class="h-8 w-64 rounded bg-[var(--border)] mb-4"></div>
+    <div class="h-40 rounded-2xl bg-[var(--border)] mb-4"></div>
+    <div class="h-64 rounded-2xl bg-[var(--border)]"></div>
+  </div>
+
+  <div x-show="!loading && v" x-cloak>
+
+    <!-- ══════ Header ══════ -->
+    <div class="card p-6 mb-6">
+      <div class="flex items-start justify-between gap-6 flex-wrap">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-3 flex-wrap mb-2">
+            <h2 class="font-display text-[28px] sm:text-[34px] leading-tight tracking-tight"
+                x-text="v.verification_number"></h2>
+            <span class="pill" :class="statusPill(v.status)" x-text="prettyStatus(v.status)"></span>
+            <template x-if="v.risk_assessment">
+              <span class="pill" :class="riskPill(v.risk_assessment.risk_level)"
+                    x-text="v.risk_assessment.risk_level + ' risk'"></span>
+            </template>
+            <template x-if="v.risk_assessment?.requires_edd">
+              <span class="pill pill-danger">EDD Required</span>
+            </template>
+          </div>
+          <p class="text-[14.5px] text-[var(--ink-2)]">
+            <a :href="'/app/clients/' + v.client + '/'" class="hover:text-[var(--accent)] transition">
+              <span x-text="v.client_name"></span>
+            </a>
+            <span class="mx-2">·</span>
+            <span class="font-mono text-[13px]" x-text="v.client_nrc"></span>
+            <span class="mx-2">·</span>
+            <span x-text="v.client_type"></span>
+          </p>
+          <div class="mt-3 flex items-center gap-4 text-[12.5px] text-[var(--ink-3)] font-mono flex-wrap">
+            <span x-text="'Initiated: ' + fmtDate(v.initiated_at)"></span>
+            <span>·</span>
+            <span x-text="'By: ' + (v.initiated_by_name || '—')"></span>
+            <template x-if="v.expires_at">
+              <span>·</span>
+              <span x-text="'Expires: ' + fmtDate(v.expires_at)"></span>
+            </template>
+          </div>
+        </div>
+
+        <div class="flex gap-2 flex-wrap">
+          <template x-if="canVerify()">
+            <button @click="openVerifyModal()"
+                    class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              Verify
+            </button>
+          </template>
+          <template x-if="canReject()">
+            <button @click="openRejectModal()"
+                    class="!w-auto px-5 py-2.5 text-[13.5px] font-medium rounded-xl border border-red-200 text-red-700 hover:bg-red-50 transition">
+              Reject
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div x-show="flashError" x-cloak
+           class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13.5px] text-red-800">
+        <div class="flex items-start gap-2">
+          <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01"/>
+          </svg>
+          <span x-text="flashError"></span>
+        </div>
+      </div>
+      <div x-show="flashSuccess" x-cloak
+           class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13.5px] text-emerald-800">
+        <div class="flex items-start gap-2">
+          <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+          <span x-text="flashSuccess"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ Two-column grid ══════ -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- Submitted information -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h3 class="font-display text-[20px] tracking-tight">Submitted information</h3>
+              <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5">
+                <span x-show="hasSubmittedData()">Data provided for verification</span>
+                <span x-show="!hasSubmittedData()">No data yet — submit client details to run checks</span>
+              </p>
+            </div>
+            <button x-show="canSubmitData()" @click="openDataModal()"
+                    class="!w-auto px-4 py-2 text-[13px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition inline-flex items-center gap-2">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              <span x-text="hasSubmittedData() ? 'Edit data' : 'Enter data'"></span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Full name (as submitted)</p>
+              <p class="text-[15px]"
+                 :class="!v.submitted_full_name && 'text-[var(--ink-3)] italic'"
+                 x-text="v.submitted_full_name || 'Not entered'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">ID type</p>
+              <p class="text-[15px]"
+                 :class="!v.submitted_id_type && 'text-[var(--ink-3)] italic'"
+                 x-text="v.submitted_id_type || 'Not entered'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">ID number</p>
+              <p class="text-[15px] font-mono"
+                 :class="!v.submitted_id_number && 'text-[var(--ink-3)] italic'"
+                 x-text="v.submitted_id_number || 'Not entered'"></p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Date of birth</p>
+              <p class="text-[15px]"
+                 :class="!v.submitted_dob && 'text-[var(--ink-3)] italic'"
+                 x-text="v.submitted_dob ? fmtDate(v.submitted_dob) : 'Not entered'"></p>
+            </div>
+          </div>
+
+          <div x-show="v.submitted_address" class="mt-5 pt-5 border-t border-[var(--border)]">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Submitted address</p>
+            <p class="text-[14px] text-[var(--ink-2)]" x-text="v.submitted_address"></p>
+          </div>
+        </div>
+
+        <!-- Verification checks -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h3 class="font-display text-[20px] tracking-tight">Verification checks</h3>
+              <p class="text-[12.5px] text-[var(--ink-3)] mt-0.5"
+                 x-text="checks.length + ' checks completed'"></p>
+            </div>
+            <div class="flex gap-1 items-center">
+              <span x-show="passedCount() > 0"
+                    class="text-[11px] font-mono px-2 py-1 rounded-md bg-emerald-50 text-emerald-700">
+                <span x-text="passedCount()"></span> pass
+              </span>
+              <span x-show="failedCount() > 0"
+                    class="text-[11px] font-mono px-2 py-1 rounded-md bg-red-50 text-red-700">
+                <span x-text="failedCount()"></span> fail
+              </span>
+              <button x-show="canRunChecks() && checks.length > 0"
+                      @click="openDataModal()"
+                      :disabled="submitting"
+                      class="!w-auto px-4 py-2 text-[13px] font-medium rounded-xl border border-[var(--border-2)] text-[var(--ink-2)] hover:bg-[var(--cream)] transition">
+                Re-run checks
+              </button>
+            </div>
+          </div>
+
+          <div x-show="checks.length === 0" class="py-12 text-center">
+            <div class="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
+                 style="background: color-mix(in srgb, var(--accent) 10%, transparent);">
+              <svg class="w-5 h-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+            </div>
+            <p class="text-[13.5px] text-[var(--ink-3)] mb-1">No checks have been run yet.</p>
+            <p class="text-[12px] text-[var(--ink-4)] mb-5">
+              <span x-show="!hasSubmittedData()">Enter the client's ID details first, then run verification.</span>
+              <span x-show="hasSubmittedData()">Click below to run automated verification checks.</span>
+            </p>
+            <button @click="openDataModal()" :disabled="submitting"
+                    class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+              <span x-text="hasSubmittedData() ? 'Run verification checks' : 'Enter ID details'"></span>
+            </button>
+          </div>
+
+          <div x-show="checks.length > 0" class="space-y-2">
+            <template x-for="c in checks" :key="c.id">
+              <div class="flex items-center gap-3 p-3 rounded-lg bg-[var(--cream)]">
+                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                     :style="'background: ' + checkBg(c.result)">
+                  <template x-if="c.result === 'PASS'">
+                    <svg class="w-4 h-4" :style="'color:' + checkFg(c.result)" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </template>
+                  <template x-if="c.result === 'FAIL'">
+                    <svg class="w-4 h-4" :style="'color:' + checkFg(c.result)" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </template>
+                  <template x-if="c.result === 'PENDING' || c.result === 'MANUAL_REVIEW'">
+                    <svg class="w-4 h-4" :style="'color:' + checkFg(c.result)" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01"/>
+                    </svg>
+                  </template>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13.5px] font-medium" x-text="prettyCheckType(c.check_type)"></p>
+                  <p class="text-[11.5px] text-[var(--ink-3)] font-mono truncate mt-0.5">
+                    <span x-text="c.provider || 'internal'"></span>
+                    <template x-if="c.reference">
+                      <span> · <span x-text="c.reference"></span></span>
+                    </template>
+                    <template x-if="c.confidence_score">
+                      <span> · confidence <span x-text="c.confidence_score + '%'"></span></span>
+                    </template>
+                  </p>
+                </div>
+                <span class="pill" :class="checkPill(c.result)" x-text="c.result"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Review notes -->
+        <div class="card p-6" x-show="v.review_notes || v.rejection_reason">
+          <h3 class="font-display text-[20px] tracking-tight mb-4">Review notes</h3>
+          <div x-show="v.review_notes" class="text-[14px] text-[var(--ink-2)] leading-relaxed"
+               x-text="v.review_notes"></div>
+          <div x-show="v.rejection_reason" class="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+            <p class="text-[11px] uppercase tracking-wider text-red-700 font-mono mb-1">Rejection reason</p>
+            <p class="text-[14px] text-red-800" x-text="v.rejection_reason"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right -->
+      <div class="space-y-6">
+
+        <!-- Risk -->
+        <div class="card p-6" x-show="v.risk_assessment">
+          <h3 class="font-display text-[20px] tracking-tight mb-4">Risk assessment</h3>
+
+          <div class="flex items-center gap-3 mb-5">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                 :style="'background:' + riskBg(v.risk_assessment?.risk_level)">
+              <span class="font-display text-[22px] leading-none"
+                    :style="'color:' + riskFg(v.risk_assessment?.risk_level)"
+                    x-text="v.risk_assessment?.risk_score || 0"></span>
+            </div>
+            <div>
+              <p class="text-[15px] font-semibold" x-text="v.risk_assessment?.risk_level + ' risk'"></p>
+              <p class="text-[12px] text-[var(--ink-3)]">Score out of 100</p>
+            </div>
+          </div>
+
+          <dl class="space-y-2.5 text-[13.5px]">
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">PEP</dt>
+              <dd :class="v.risk_assessment?.is_pep ? 'text-red-600 font-medium' : ''"
+                  x-text="v.risk_assessment?.is_pep ? 'Yes' : 'No'"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">Sanctions hit</dt>
+              <dd :class="v.risk_assessment?.is_sanctioned ? 'text-red-600 font-medium' : ''"
+                  x-text="v.risk_assessment?.is_sanctioned ? 'Yes' : 'No'"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--ink-3)]">EDD required</dt>
+              <dd :class="v.risk_assessment?.requires_edd ? 'text-amber-600 font-medium' : ''"
+                  x-text="v.risk_assessment?.requires_edd ? 'Yes' : 'No'"></dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- Documents -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display text-[20px] tracking-tight">Documents</h3>
+            <span class="pill pill-neutral"
+                  x-text="(v.documents ? v.documents.length : 0) + ' files'"></span>
+          </div>
+
+          <div x-show="v.documents && v.documents.length > 0" class="space-y-2">
+            <template x-for="doc in v.documents" :key="doc.id">
+              <a :href="doc.file || doc.file_front" target="_blank"
+                 class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--cream)] transition">
+                <div class="w-8 h-8 rounded-lg bg-[var(--cream)] flex items-center justify-center flex-shrink-0">
+                  <svg class="w-4 h-4 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-medium truncate" x-text="doc.document_type"></p>
+                  <p class="text-[11px] text-[var(--ink-3)]" x-text="fmtDate(doc.uploaded_at)"></p>
+                </div>
+              </a>
+            </template>
+          </div>
+
+          <p x-show="!v.documents || v.documents.length === 0"
+             class="text-[13.5px] text-[var(--ink-3)]">No documents uploaded yet.</p>
+        </div>
+
+        <!-- Timeline -->
+        <div class="card p-6">
+          <h3 class="font-display text-[20px] tracking-tight mb-4">Timeline</h3>
+          <div class="relative pl-6">
+            <div class="absolute left-1.5 top-2 bottom-2 w-px bg-[var(--border-2)]"></div>
+
+            <div class="relative pb-5">
+              <div class="absolute -left-4 top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white"></div>
+              <p class="text-[13px] font-medium">Initiated</p>
+              <p class="text-[11.5px] text-[var(--ink-3)] font-mono mt-0.5"
+                 x-text="fmtDateTime(v.initiated_at)"></p>
+            </div>
+
+            <div class="relative pb-5" x-show="v.submitted_at">
+              <div class="absolute -left-4 top-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-white"></div>
+              <p class="text-[13px] font-medium">Submitted for review</p>
+              <p class="text-[11.5px] text-[var(--ink-3)] font-mono mt-0.5"
+                 x-text="fmtDateTime(v.submitted_at)"></p>
+            </div>
+
+            <div class="relative" x-show="v.verified_at || v.reviewed_at">
+              <div class="absolute -left-4 top-1 w-3 h-3 rounded-full border-2 border-white"
+                   :style="'background:' + (v.status === 'VERIFIED' ? '#16A34A' : '#DC2626')"></div>
+              <p class="text-[13px] font-medium"
+                 x-text="v.status === 'VERIFIED' ? 'Verified' : 'Rejected'"></p>
+              <p class="text-[11.5px] text-[var(--ink-3)] font-mono mt-0.5"
+                 x-text="fmtDateTime(v.verified_at || v.reviewed_at)"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ Data entry modal ══════ -->
+  <div x-show="showDataModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showDataModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showDataModal = false">
+
+      <div class="flex items-start gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="w-5 h-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h0a2 2 0 012 2v1m-4 0a2 2 0 104 0"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-display text-[24px] tracking-tight">ID verification details</h3>
+          <p class="text-[13px] text-[var(--ink-2)] mt-1">
+            Enter the client's ID information. Checks run against these.
+          </p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="label">Full name (as on ID) *</label>
+          <input type="text" x-model="dataForm.full_name" class="input"
+                 placeholder="e.g. Grace Mwansa" required />
+        </div>
+
+        <div>
+          <label class="label">ID type *</label>
+          <select x-model="dataForm.id_type" class="input" required>
+            <option value="NRC">National Registration Card (NRC)</option>
+            <option value="PASSPORT">Passport</option>
+            <option value="DRIVERS_LICENSE">Driver's Licence</option>
+            <option value="VOTER_ID">Voter ID</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="label">ID number *</label>
+          <input type="text" x-model="dataForm.id_number" class="input font-mono"
+                 placeholder="e.g. 927140-55-6" required />
+        </div>
+
+        <div>
+          <label class="label">Date of birth</label>
+          <input type="date" x-model="dataForm.dob" class="input" />
+        </div>
+
+        <div>
+          <label class="label">Address</label>
+          <textarea x-model="dataForm.address" class="input resize-none" rows="2"
+                    placeholder="Optional residential address"></textarea>
+        </div>
+      </div>
+
+      <div x-show="dataError" x-cloak
+           class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+           x-text="dataError"></div>
+
+      <div class="flex justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
+        <button @click="showDataModal = false"
+                class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">
+          Cancel
+        </button>
+        <button @click="submitDataAndRunChecks()" :disabled="submitting || !canSubmitForm()"
+                class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+          <span x-text="submitting ? 'Running checks…' : 'Save & run checks'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ Verify modal ══════ -->
+  <div x-show="showVerifyModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showVerifyModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" @click.away="showVerifyModal = false">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background: rgba(22,163,74,0.12);">
+          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-display text-[24px] tracking-tight">Verify KYC</h3>
+          <p class="text-[13px] text-[var(--ink-2)] mt-1">
+            Mark this client's KYC as verified. This is a compliance action.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <label class="label">Notes (optional)</label>
+        <textarea x-model="verifyNotes" rows="3" class="input resize-none"
+                  placeholder="Any notes about the verification..."></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showVerifyModal = false"
+                class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">
+          Cancel
+        </button>
+        <button @click="confirmVerify()" :disabled="submitting"
+                class="btn-primary !w-auto !py-2.5 !px-5 !text-[13.5px]">
+          <span x-text="submitting ? 'Verifying…' : 'Confirm verification'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ Reject modal ══════ -->
+  <div x-show="showRejectModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(10,10,10,0.5); backdrop-filter: blur(4px);"
+       @keydown.escape.window="showRejectModal = false">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" @click.away="showRejectModal = false">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background: rgba(220,38,38,0.12);">
+          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-display text-[24px] tracking-tight">Reject KYC</h3>
+          <p class="text-[13px] text-[var(--ink-2)] mt-1">
+            Provide a clear reason. It will be recorded for audit.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <label class="label">Reason *</label>
+        <textarea x-model="rejectReason" rows="4" class="input resize-none"
+                  placeholder="e.g. NRC photo is blurry, or ID number does not match..."></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="showRejectModal = false"
+                class="px-4 py-2 text-[13.5px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]">
+          Cancel
+        </button>
+        <button @click="confirmReject()" :disabled="!rejectReason.trim() || submitting"
+                class="px-5 py-2.5 text-[13.5px] font-medium rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition">
+          Reject KYC
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function kycDetail(verificationId) {
+  return {
+    verificationId,
+    loading: true,
+    submitting: false,
+    v: null,
+    checks: [],
+
+    showDataModal: false,
+    showVerifyModal: false,
+    showRejectModal: false,
+
+    verifyNotes: '',
+    rejectReason: '',
+    dataError: '',
+
+    dataForm: {
+      full_name: '',
+      id_type: 'NRC',
+      id_number: '',
+      dob: '',
+      address: '',
+    },
+
+    flashError: '',
+    flashSuccess: '',
+
+    async init() {
+      await this.fetchVerification();
+      this.loading = false;
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async _fetch(url) {
+      const r = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + this.getToken() },
+      });
+      if (!r.ok) throw new Error('Fetch failed');
+      return r.json();
+    },
+
+    async fetchVerification() {
+      try {
+        const data = await this._fetch(`/api/kyc/verifications/${this.verificationId}/`);
+        this.v = data;
+        this.checks = data.checks || [];
+      } catch (e) {
+        this.flashError = 'Could not load verification.';
+      }
+    },
+
+    // ---- Permissions ----
+    canVerify()    { return this.v && ['PENDING_REVIEW', 'IN_PROGRESS'].includes(this.v.status); },
+    canReject()    { return this.v && ['PENDING_REVIEW', 'IN_PROGRESS'].includes(this.v.status); },
+    canRunChecks() { return this.v && this.v.status !== 'VERIFIED'; },
+    canSubmitData(){ return this.v && this.v.status !== 'VERIFIED'; },
+
+    hasSubmittedData() {
+      return this.v && this.v.submitted_id_number && this.v.submitted_full_name;
+    },
+
+    canSubmitForm() {
+      return this.dataForm.full_name.trim()
+          && this.dataForm.id_number.trim()
+          && this.dataForm.id_type;
+    },
+
+    // ---- Data entry ----
+    openDataModal() {
+      this.dataError = '';
+      // Prefill with existing submitted data if any
+      this.dataForm = {
+        full_name: this.v?.submitted_full_name || (this.v?.client_name || ''),
+        id_type:   this.v?.submitted_id_type   || 'NRC',
+        id_number: this.v?.submitted_id_number || (this.v?.client_nrc || ''),
+        dob:       this.v?.submitted_dob       || '',
+        address:   this.v?.submitted_address   || '',
+      };
+      this.showDataModal = true;
+    },
+
+    async submitDataAndRunChecks() {
+      this.dataError = '';
+      this.submitting = true;
+      this.flashError = '';
+      this.flashSuccess = '';
+
+      try {
+        // Step 1: submit the data + run checks (single API call)
+        const r = await fetch(`/api/kyc/verifications/${this.verificationId}/run_checks/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({
+            id_type: this.dataForm.id_type,
+            id_number: this.dataForm.id_number,
+            full_name: this.dataForm.full_name,
+            dob: this.dataForm.dob || null,
+            address: this.dataForm.address || '',
+          }),
+        });
+
+        const data = await r.json();
+        if (!r.ok) {
+          this.dataError = data.error || data.detail || 'Checks failed.';
+          return;
+        }
+
+        this.v = data;
+        this.checks = data.checks || [];
+        this.showDataModal = false;
+        this.flashSuccess = 'Verification checks complete. Review the results below.';
+        setTimeout(() => this.flashSuccess = '', 5000);
+      } catch (e) {
+        this.dataError = 'Network error. Please try again.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    // ---- Verify / Reject ----
+    openVerifyModal() { this.verifyNotes = ''; this.showVerifyModal = true; },
+
+    async confirmVerify() {
+      this.submitting = true;
+      this.flashError = '';
+      try {
+        const r = await fetch(`/api/kyc/verifications/${this.verificationId}/verify/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({ notes: this.verifyNotes }),
+        });
+        const data = await r.json();
+        if (!r.ok) { this.flashError = data.error || 'Verification failed.'; return; }
+        this.v = data;
+        this.showVerifyModal = false;
+        this.flashSuccess = 'KYC verified successfully. Client status updated.';
+        setTimeout(() => this.flashSuccess = '', 5000);
+      } catch (e) {
+        this.flashError = 'Network error.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    openRejectModal() { this.rejectReason = ''; this.showRejectModal = true; },
+
+    async confirmReject() {
+      this.submitting = true;
+      this.flashError = '';
+      try {
+        const r = await fetch(`/api/kyc/verifications/${this.verificationId}/reject/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getToken(),
+          },
+          body: JSON.stringify({ reason: this.rejectReason }),
+        });
+        const data = await r.json();
+        if (!r.ok) { this.flashError = data.error || 'Rejection failed.'; return; }
+        this.v = data;
+        this.showRejectModal = false;
+        this.flashSuccess = 'KYC rejected. Client will need to resubmit.';
+        setTimeout(() => this.flashSuccess = '', 5000);
+      } catch (e) {
+        this.flashError = 'Network error.';
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    // ---- Stats ----
+    passedCount() { return this.checks.filter(c => c.result === 'PASS').length; },
+    failedCount() { return this.checks.filter(c => c.result === 'FAIL').length; },
+
+    // ---- Formatting ----
+    fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+
+    prettyStatus(s) {
+      return {
+        NOT_STARTED: 'Not Started', IN_PROGRESS: 'In Progress',
+        PENDING_REVIEW: 'Pending Review', VERIFIED: 'Verified',
+        REJECTED: 'Rejected', EXPIRED: 'Expired',
+      }[s] || s;
+    },
+
+    statusPill(s) {
+      return {
+        NOT_STARTED: 'pill-neutral', IN_PROGRESS: 'pill-info',
+        PENDING_REVIEW: 'pill-warning', VERIFIED: 'pill-success',
+        REJECTED: 'pill-danger', EXPIRED: 'pill-neutral',
+      }[s] || 'pill-neutral';
+    },
+
+    riskPill(r) {
+      return { LOW: 'pill-success', MEDIUM: 'pill-warning', HIGH: 'pill-danger', PEP: 'pill-danger' }[r] || 'pill-neutral';
+    },
+    riskBg(r) {
+      return {
+        LOW: 'rgba(22,163,74,0.12)', MEDIUM: 'rgba(202,138,4,0.12)',
+        HIGH: 'rgba(220,38,38,0.12)', PEP: 'rgba(220,38,38,0.12)',
+      }[r] || 'rgba(113,113,122,0.12)';
+    },
+    riskFg(r) {
+      return { LOW: '#16A34A', MEDIUM: '#CA8A04', HIGH: '#DC2626', PEP: '#DC2626' }[r] || '#71717A';
+    },
+
+    prettyCheckType(t) {
+      return {
+        ID_NUMBER: 'ID Number Verification', OCR: 'Document OCR',
+        FACE_MATCH: 'Face Match', LIVENESS: 'Liveness Detection',
+        ADDRESS: 'Proof of Address', PHONE: 'Phone Verification',
+        EMAIL: 'Email Verification', AML: 'AML / Sanctions Screening',
+        PEP: 'PEP Screening', ADVERSE_MEDIA: 'Adverse Media Check',
+        CRB: 'Credit Reference Bureau',
+      }[t] || t;
+    },
+
+    checkPill(r) {
+      return {
+        PASS: 'pill-success', FAIL: 'pill-danger',
+        PENDING: 'pill-warning', MANUAL_REVIEW: 'pill-info',
+        SKIPPED: 'pill-neutral',
+      }[r] || 'pill-neutral';
+    },
+
+    checkBg(r) {
+      return {
+        PASS: 'rgba(22,163,74,0.12)', FAIL: 'rgba(220,38,38,0.12)',
+        PENDING: 'rgba(202,138,4,0.12)', MANUAL_REVIEW: 'rgba(29,78,216,0.12)',
+        SKIPPED: 'rgba(113,113,122,0.12)',
+      }[r] || 'rgba(113,113,122,0.12)';
+    },
+
+    checkFg(r) {
+      return {
+        PASS: '#16A34A', FAIL: '#DC2626',
+        PENDING: '#CA8A04', MANUAL_REVIEW: '#1D4ED8',
+        SKIPPED: '#71717A',
+      }[r] || '#71717A';
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('kycDetail', kycDetail);
+});
+</script>
+
+{% endblock %}

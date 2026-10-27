@@ -1,0 +1,608 @@
+﻿{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Dashboard — Nimbus{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/echarts.min.js' %}"></script>
+<script>
+function dashboardPage() {
+  return {
+    loading: true,
+    error: '',
+    chartInstance: null,
+    agingChartInstance: null,
+    pieChartInstance: null,
+    kycChartInstance: null,
+
+    user: { name: '' },
+
+    stats: {
+      total_clients: 0, active_loans: 0, total_disbursed: 0,
+      today_collections: 0, overdue_loans: 0,
+      new_clients_this_month: 0, par_30: 0,
+      cash_position: 0,
+      disbursed_mtd: 0, disbursed_last_month: 0, disbursement_growth_pct: 0,
+      collection_rate_pct: 0,
+      pipeline: { in_review_count: 0, in_review_value: 0, approved_count: 0, approved_value: 0 },
+      portfolio_aging: { current: 0, par_1_30: 0, par_31_60: 0, par_61_90: 0, par_90_plus: 0 },
+      // New Analytics Data
+      savings_vs_loans: { loans: 0, savings: 0 },
+      kyc_stats: { verified: 0, unverified: 0, compliance_rate: 0 }
+    },
+
+    trend: { series: [], totals: { disbursed: 0, collected: 0 } },
+    trendRange: 30,
+    tasks: [],
+
+    async init() {
+      await Promise.all([
+        this.loadUser(),
+        this.loadStats(),
+        this.loadTrend(),
+        this.loadTasks(),
+      ]);
+      this.loading = false;
+      window.addEventListener('resize', () => {
+        if (this.chartInstance) this.chartInstance.resize();
+        if (this.agingChartInstance) this.agingChartInstance.resize();
+        if (this.pieChartInstance) this.pieChartInstance.resize();
+        if (this.kycChartInstance) this.kycChartInstance.resize();
+      });
+      this._poller = setInterval(() => {
+        this.loadStats();
+        this.loadTasks();
+      }, 60000);
+    },
+
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    async _fetchJSON(url) {
+      const r = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + this.getToken() },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+
+    async loadUser() {
+      try {
+        const data = await this._fetchJSON('/api/auth/me/');
+        const first = data.first_name || data.firstName || '';
+        const last  = data.last_name  || data.lastName  || '';
+        const full  = (first + ' ' + last).trim();
+        this.user = { name: full || data.username || data.email || 'there' };
+      } catch (e) {
+        this.user = { name: 'there' };
+      }
+    },
+
+    async loadStats() {
+      try {
+        // Reverted back to your working endpoint
+        const data = await this._fetchJSON('/api/reports/dashboard/');
+        this.stats = { ...this.stats, ...data };
+        
+        // Merge nested objects so we don't lose defaults if API returns partial
+        if (data.pipeline)          this.stats.pipeline = { ...this.stats.pipeline, ...data.pipeline };
+        if (data.portfolio_aging)   this.stats.portfolio_aging = { ...this.stats.portfolio_aging, ...data.portfolio_aging };
+        // Merge new charts data
+        if (data.savings_vs_loans)  this.stats.savings_vs_loans = { ...this.stats.savings_vs_loans, ...data.savings_vs_loans };
+        if (data.kyc_stats)         this.stats.kyc_stats = { ...this.stats.kyc_stats, ...data.kyc_stats };
+
+        await this.$nextTick();
+        this.renderAgingChart();
+        this.renderPieChart();
+        this.renderKycChart();
+      } catch (e) {
+        this.error = 'Could not load dashboard stats.';
+        console.error(e);
+      }
+    },
+
+    async loadTrend() {
+      try {
+        const data = await this._fetchJSON(`/api/reports/daily-trend/?days=${this.trendRange}`);
+        this.trend = data;
+        await this.$nextTick();
+        this.renderTrendChart();
+      } catch (e) {
+        console.error('Trend load failed', e);
+      }
+    },
+
+    async loadTasks() {
+      try {
+        const data = await this._fetchJSON('/api/origination/tasks/mine/');
+        this.tasks = (data || []).slice(0, 5);
+      } catch (e) {
+        console.error('Tasks load failed', e);
+      }
+    },
+
+    async setRange(days) {
+      this.trendRange = days;
+      await this.loadTrend();
+    },
+
+    renderTrendChart() {
+      const container = document.getElementById('trend-chart');
+      if (!container || !window.echarts) return;
+      if (this.chartInstance) { this.chartInstance.dispose(); this.chartInstance = null; }
+      this.chartInstance = window.echarts.init(container);
+      const series = this.trend?.series || [];
+      const labels = series.map(r => r.label || '');
+      const disbursed = series.map(r => Number(r.disbursed || 0));
+      const collected = series.map(r => Number(r.collected || 0));
+      this.chartInstance.setOption({
+        grid: { left: 70, right: 20, top: 20, bottom: 40 },
+        tooltip: {
+          trigger: 'axis', backgroundColor: '#0A0A0A', borderWidth: 0,
+          padding: [8, 12], textStyle: { color: '#FFFFFF', fontSize: 12 },
+          formatter: (params) => {
+            const lines = params.map(p => `${p.marker} ${p.seriesName}: ${this.fmtMoney(p.value)}`);
+            return `<div style="color:#A1A1AA;font-size:11px;margin-bottom:4px">${params[0].name}</div>${lines.join('<br/>')}`;
+          },
+        },
+        legend: { bottom: 0, textStyle: { color: '#71717A', fontSize: 11 }, itemWidth: 12, itemHeight: 8 },
+        xAxis: {
+          type: 'category', data: labels, boundaryGap: false,
+          axisLine: { lineStyle: { color: 'rgba(10,10,10,0.08)' } },
+          axisTick: { show: false },
+          axisLabel: { color: '#A1A1AA', fontSize: 11 },
+        },
+        yAxis: {
+          type: 'value', axisLine: { show: false }, axisTick: { show: false },
+          splitLine: { lineStyle: { color: 'rgba(10,10,10,0.06)', type: 'dashed' } },
+          axisLabel: { color: '#A1A1AA', fontSize: 11, formatter: (v) => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v },
+        },
+        series: [
+          {
+            name: 'Disbursed', type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+            data: disbursed, lineStyle: { width: 2, color: '#B45309' }, itemStyle: { color: '#B45309' },
+            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0.05, color: 'rgba(180,83,9,0.35)' },
+                { offset: 0.95, color: 'rgba(180,83,9,0.02)' },
+              ] } },
+          },
+          {
+            name: 'Collected', type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+            data: collected, lineStyle: { width: 2, color: '#047857' }, itemStyle: { color: '#047857' },
+            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0.05, color: 'rgba(4,120,87,0.30)' },
+                { offset: 0.95, color: 'rgba(4,120,87,0.02)' },
+              ] } },
+          },
+        ],
+      });
+    },
+
+    renderAgingChart() {
+      const container = document.getElementById('aging-chart');
+      if (!container || !window.echarts) return;
+      if (this.agingChartInstance) { this.agingChartInstance.dispose(); this.agingChartInstance = null; }
+      this.agingChartInstance = window.echarts.init(container);
+
+      const aging = this.stats.portfolio_aging || {};
+      const categories = ['Current', '1–30 days', '31–60 days', '61–90 days', '90+ days'];
+      const values = [
+        Number(aging.current || 0),
+        Number(aging.par_1_30 || 0),
+        Number(aging.par_31_60 || 0),
+        Number(aging.par_61_90 || 0),
+        Number(aging.par_90_plus || 0),
+      ];
+      const colors = ['#047857', '#CA8A04', '#EA580C', '#DC2626', '#7F1D1D'];
+
+      this.agingChartInstance.setOption({
+        grid: { left: 70, right: 30, top: 20, bottom: 40 },
+        tooltip: {
+          trigger: 'axis', axisPointer: { type: 'shadow' },
+          backgroundColor: '#0A0A0A', borderWidth: 0,
+          padding: [8, 12], textStyle: { color: '#FFFFFF', fontSize: 12 },
+          formatter: (params) => {
+            const p = params[0];
+            return `<div style="color:#A1A1AA;font-size:11px;margin-bottom:4px">${p.name}</div>
+                    ${p.marker} ${this.fmtMoney(p.value)}`;
+          },
+        },
+        xAxis: {
+          type: 'category', data: categories,
+          axisLine: { lineStyle: { color: 'rgba(10,10,10,0.08)' } },
+          axisTick: { show: false },
+          axisLabel: { color: '#71717A', fontSize: 11 },
+        },
+        yAxis: {
+          type: 'value', axisLine: { show: false }, axisTick: { show: false },
+          splitLine: { lineStyle: { color: 'rgba(10,10,10,0.06)', type: 'dashed' } },
+          axisLabel: { color: '#A1A1AA', fontSize: 11, formatter: (v) => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v },
+        },
+        series: [{
+          type: 'bar',
+          data: values.map((v, i) => ({
+            value: v,
+            itemStyle: { color: colors[i], borderRadius: [6, 6, 0, 0] },
+          })),
+          barMaxWidth: 56,
+          label: {
+            show: true, position: 'top',
+            formatter: (p) => this.fmtMoney(p.value),
+            color: '#52525B', fontSize: 11, fontWeight: 500,
+          },
+        }],
+      });
+    },
+
+    renderPieChart() {
+      const container = document.getElementById('pie-chart');
+      if (!container || !window.echarts) return;
+      if (this.pieChartInstance) { this.pieChartInstance.dispose(); this.pieChartInstance = null; }
+      this.pieChartInstance = window.echarts.init(container);
+
+      const sv = this.stats.savings_vs_loans || {};
+      this.pieChartInstance.setOption({
+        tooltip: { trigger: 'item', formatter: p => `${p.name}: ${this.fmtMoney(p.value)}` },
+        legend: { bottom: 0, textStyle: { color: '#71717A', fontSize: 11 } },
+        series: [{
+          type: 'pie',
+          radius: ['50%', '70%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          data: [
+            { value: sv.loans || 0, name: 'Loans', itemStyle: { color: '#B45309' } },
+            { value: sv.savings || 0, name: 'Savings', itemStyle: { color: '#047857' } }
+          ]
+        }]
+      });
+    },
+
+    renderKycChart() {
+      const container = document.getElementById('kyc-chart');
+      if (!container || !window.echarts) return;
+      if (this.kycChartInstance) { this.kycChartInstance.dispose(); this.kycChartInstance = null; }
+      this.kycChartInstance = window.echarts.init(container);
+
+      const k = this.stats.kyc_stats || {};
+      const rate = (k.compliance_rate || 0).toFixed(0);
+      
+      this.kycChartInstance.setOption({
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'pie',
+          radius: ['60%', '80%'],
+          label: { 
+            show: true, position: 'center', 
+            formatter: `{val|${rate}%}\n{sub|Verified}`, 
+            rich: {
+              val: { fontSize: 22, fontWeight: 'bold', color: '#0A0A0A', lineHeight: 30 },
+              sub: { fontSize: 11, color: '#71717A' }
+            }
+          },
+          data: [
+            { value: k.verified || 0, name: 'Verified', itemStyle: { color: '#047857' } },
+            { value: k.unverified || 0, name: 'Pending', itemStyle: { color: '#E4E4E7' } }
+          ]
+        }]
+      });
+    },
+
+    fmtMoney(v) {
+      const n = Number(v || 0);
+      return 'K ' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtNum(v) { return Number(v || 0).toLocaleString('en-ZM'); },
+
+    fmtRelative(iso) {
+      if (!iso) return '';
+      const d = new Date(iso), now = new Date();
+      const diffH = Math.round((d - now) / 36e5);
+      if (diffH < 0) return Math.abs(diffH) + 'h overdue';
+      if (diffH < 24) return 'Due in ' + diffH + 'h';
+      return 'Due ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    },
+
+    priorityColor(p) {
+      return { URGENT: '#DC2626', HIGH: '#EA580C', NORMAL: '#CA8A04', LOW: '#65A30D' }[p] || '#71717A';
+    },
+
+    taskHref(t) {
+      if (t.related_type === 'LOAN_APPLICATION') return '/app/applications/';
+      if (t.related_type === 'LOAN')             return '/app/loans/';
+      if (t.related_type === 'CLIENT')           return '/app/clients/';
+      if (t.related_type === 'PAYMENT')          return '/app/payments/';
+      return '/app/dashboard/';
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('dashboardPage', dashboardPage);
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="dashboardPage" x-init="init()">
+
+  <nav class="mb-6 flex items-center gap-2 text-[13px] text-[var(--ink-3)]" aria-label="Breadcrumb">
+    <span class="text-[var(--ink)] font-medium">Dashboard</span>
+  </nav>
+
+  <div class="mb-8 flex items-start justify-between gap-6 flex-wrap">
+    <div>
+      <h2 class="font-display text-[32px] sm:text-[40px] leading-[1.05] tracking-tight">
+        Good morning, <span x-text="user?.name || 'there'"></span>.
+      </h2>
+      <p class="mt-2 text-[15px] text-[var(--ink-2)]">
+        Here's what's happening across your portfolio today.
+      </p>
+    </div>
+    <div class="flex items-center gap-2 text-[12px] text-[var(--ink-3)] font-mono">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      Live · refreshes every 60s
+    </div>
+  </div>
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Row 1: Core portfolio KPIs                                  -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+        <span class="pill pill-success" x-show="stats.new_clients_this_month > 0"
+              x-text="'+' + stats.new_clients_this_month + ' MTD'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active Clients</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtNum(stats.total_clients)"></p>
+    </div>
+
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <span class="pill pill-info" x-text="fmtNum(stats.active_loans) + ' loans'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Portfolio Value</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.total_disbursed)"></p>
+    </div>
+
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <span class="pill" :class="stats.par_30 > 5 ? 'pill-danger' : stats.par_30 > 3 ? 'pill-warning' : 'pill-success'"
+              x-text="stats.overdue_loans + ' overdue'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">PAR 30</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="(stats.par_30 || 0).toFixed(1) + '%'"></p>
+    </div>
+
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+        <span class="pill pill-info">Today</span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Collected Today</p>
+      <p class="font-display text-[36px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.today_collections)"></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Row 2: Operations health strip                              -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Cash Position -->
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+          </svg>
+        </div>
+        <span class="pill pill-neutral">Cash + Bank</span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Cash Position</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.cash_position)"></p>
+      <p class="text-[11px] text-[var(--ink-3)] mt-2 font-mono">Available for disbursement</p>
+    </div>
+
+    <!-- Disbursed MTD -->
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+          </svg>
+        </div>
+        <span class="pill"
+              :class="stats.disbursement_growth_pct > 0 ? 'pill-success'
+                       : stats.disbursement_growth_pct < 0 ? 'pill-danger' : 'pill-neutral'"
+              x-text="(stats.disbursement_growth_pct >= 0 ? '+' : '') + stats.disbursement_growth_pct + '% vs last mo'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Disbursed MTD</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums" x-text="fmtMoney(stats.disbursed_mtd)"></p>
+      <p class="text-[11px] text-[var(--ink-3)] mt-2 font-mono">
+        Last month: <span x-text="fmtMoney(stats.disbursed_last_month)"></span>
+      </p>
+    </div>
+
+    <!-- Collection Rate -->
+    <div class="card p-5 card-hover transition">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <span class="pill"
+              :class="stats.collection_rate_pct >= 90 ? 'pill-success'
+                       : stats.collection_rate_pct >= 75 ? 'pill-warning' : 'pill-danger'"
+              x-text="stats.collection_rate_pct >= 90 ? 'On track'
+                       : stats.collection_rate_pct >= 75 ? 'Watch' : 'Behind'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Collection Rate MTD</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums"
+         x-text="(stats.collection_rate_pct || 0).toFixed(1) + '%'"></p>
+      <p class="text-[11px] text-[var(--ink-3)] mt-2 font-mono">
+        Collected vs Expected this month
+      </p>
+    </div>
+
+    <!-- Applications Pipeline -->
+    <a href="/app/applications/" class="card p-5 card-hover transition cursor-pointer">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+             style="background: color-mix(in srgb, var(--accent) 12%, transparent);">
+          <svg class="h-5 w-5" style="color: var(--accent);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <span class="pill pill-info"
+              x-text="stats.pipeline.in_review_count + stats.pipeline.approved_count + ' open'"></span>
+      </div>
+      <p class="text-[12px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Applications Pipeline</p>
+      <p class="font-display text-[32px] leading-none mt-2 tabular-nums"
+         x-text="stats.pipeline.in_review_count"></p>
+      <p class="text-[11px] text-[var(--ink-3)] mt-2 font-mono leading-relaxed">
+        In review (<span x-text="fmtMoney(stats.pipeline.in_review_value)"></span>)<br>
+        <span x-show="stats.pipeline.approved_count > 0" class="text-amber-700">
+          <span x-text="stats.pipeline.approved_count"></span> awaiting disbursement
+          (<span x-text="fmtMoney(stats.pipeline.approved_value)"></span>)
+        </span>
+      </p>
+    </a>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Row 3: Trend chart + Tasks                                  -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <div class="lg:col-span-2 card p-6">
+      <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+        <div>
+          <h3 class="font-display text-[22px] tracking-tight">Disbursements & Collections</h3>
+          <p class="text-[13px] text-[var(--ink-3)] mt-1">
+            Last <span x-text="trendRange"></span> days ·
+            <span class="font-mono"><span x-text="fmtMoney(trend.totals?.disbursed || 0)"></span> out</span> ·
+            <span class="font-mono"><span x-text="fmtMoney(trend.totals?.collected || 0)"></span> in</span>
+          </p>
+        </div>
+        <div class="flex gap-1">
+          <button @click="setRange(7)" :class="trendRange === 7 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'"
+                  class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">7d</button>
+          <button @click="setRange(30)" :class="trendRange === 30 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'"
+                  class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">30d</button>
+          <button @click="setRange(90)" :class="trendRange === 90 ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'"
+                  class="px-3 py-1.5 text-[12px] font-medium rounded-md transition">90d</button>
+        </div>
+      </div>
+      <div id="trend-chart" class="h-72" style="min-height: 288px;"></div>
+    </div>
+
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="font-display text-[22px] tracking-tight">Pending Tasks</h3>
+        <span class="pill pill-neutral" x-text="tasks.length + ' open'"></span>
+      </div>
+      <div class="space-y-3" x-show="tasks.length > 0">
+        <template x-for="task in tasks" :key="task.id">
+          <a :href="taskHref(task)" class="flex items-start gap-3 p-3 rounded-lg hover:bg-[var(--cream)] transition cursor-pointer">
+            <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0" :style="'background:' + priorityColor(task.priority)"></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[13.5px] font-medium truncate" x-text="task.title"></p>
+              <p class="text-[12px] text-[var(--ink-3)] truncate mt-0.5">
+                <span x-text="task.assigned_to_name"></span>
+                <template x-if="task.due_date">
+                  <span> · <span x-text="fmtRelative(task.due_date)"></span></span>
+                </template>
+              </p>
+            </div>
+          </a>
+        </template>
+      </div>
+      <div x-show="tasks.length === 0 && !loading" class="text-center py-10">
+        <svg class="w-10 h-10 mx-auto text-[var(--ink-4)] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        <p class="text-[13.5px] text-[var(--ink-3)]">You're all caught up.</p>
+      </div>
+      <a href="/app/applications/" class="mt-6 block text-center text-[13px] font-medium text-[var(--accent)] hover:underline">
+        View all tasks →
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Row 4: Portfolio Aging                                      -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="card p-6 mb-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <div>
+        <h3 class="font-display text-[22px] tracking-tight">Portfolio Aging</h3>
+        <p class="text-[13px] text-[var(--ink-3)] mt-1">
+          Outstanding balance by days past due
+        </p>
+      </div>
+      <a href="/app/accounting/boz-reports/" class="text-[12.5px] text-[var(--accent)] hover:underline font-medium">
+        BoZ reports →
+      </a>
+    </div>
+    <div id="aging-chart" class="h-64" style="min-height: 256px;"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Row 5: New Analytics (Loans vs Savings & KYC)               -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Loans vs Savings -->
+    <div class="card p-6">
+      <h3 class="font-display text-[18px] tracking-tight mb-2">Loans vs Savings</h3>
+      <p class="text-[12px] text-[var(--ink-3)] mb-4">Total portfolio vs. group savings pool</p>
+      <div id="pie-chart" class="h-56"></div>
+    </div>
+
+    <!-- KYC Compliance -->
+    <div class="card p-6">
+      <h3 class="font-display text-[18px] tracking-tight mb-2">KYC Compliance</h3>
+      <p class="text-[12px] text-[var(--ink-3)] mb-4">Percentage of verified active clients</p>
+      <div id="kyc-chart" class="h-56"></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

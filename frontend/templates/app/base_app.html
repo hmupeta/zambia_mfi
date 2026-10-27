@@ -1,0 +1,558 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" x-data="appShell()" x-init="init()">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Nimbus{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% if site.favicon %}{{ site.favicon.url }}{% else %}{% static 'images/nimbus-mark.svg' %}{% endif %}" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Tailwind -->
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+
+  <!-- Alpine.js -->
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
+
+  <!-- Nav config -->
+  <script src="{% static 'js/nav.js' %}"></script>
+
+  <style>
+    :root {
+      --ink: #0A0A0A;
+      --ink-2: #52525B;
+      --ink-3: #71717A;
+      --ink-4: #A1A1AA;
+      --cream: #FAF7F2;
+      --paper: #FFFFFF;
+      --accent: {{ site.accent_color|default:"#B45309" }};
+      --primary: {{ site.primary_color|default:"#0A0A0A" }};
+      --border: rgba(10,10,10,0.08);
+      --border-2: rgba(10,10,10,0.12);
+      --sidebar-w: 260px;
+      --sidebar-w-collapsed: 72px;
+      --topbar-h: 60px;
+    }
+       /* Dark Mode Overrides */
+    html.dark {
+      --ink: #F4F4F5;          
+      --ink-2: #A1A1AA;        
+      --ink-3: #71717A;
+      --ink-4: #52525B;        
+      --cream: #18181B;        
+      --paper: #09090B;        
+      --accent: #D97706;       
+      --border: rgba(255,255,255,0.08);
+      --border-2: rgba(255,255,255,0.12);
+    }
+
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    
+    /* Ensure the sidebar header in base_app respects the dark theme */
+    header.bg-white\/80 {
+      background-color: color-mix(in srgb, var(--paper) 80%, transparent) !important;
+    }
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    html, body { height: 100%; }
+    body { font-family: 'Inter', system-ui, sans-serif; color: var(--ink); background: var(--cream); margin: 0; }
+    .font-display { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: -0.02em; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-w);
+      transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+      background: #0A0A0A;
+      color: #D4D4D8;
+    }
+    .sidebar.collapsed { width: var(--sidebar-w-collapsed); }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .nav-section-title,
+    .sidebar.collapsed .sidebar-brand-text,
+    .sidebar.collapsed .user-meta { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+    .sidebar.collapsed .sidebar-brand { justify-content: center; }
+    .sidebar.collapsed .user-block { justify-content: center; padding-left: 0; padding-right: 0; }
+    .sidebar.collapsed .user-block .chevron { display: none; }
+    .sidebar.collapsed .user-menu-popup { display: none !important; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 0.85rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #A1A1AA;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+    .nav-item.active { background: var(--accent); color: white; box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 60%, transparent); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .nav-section-title {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #52525B;
+      padding: 1rem 0.85rem 0.5rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Main layout */
+    .main-wrapper { margin-left: var(--sidebar-w); transition: margin-left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .sidebar.collapsed ~ .main-wrapper { margin-left: var(--sidebar-w-collapsed); }
+
+    /* Topbar */
+    .topbar {
+      height: var(--topbar-h);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 30;
+    }
+
+    /* Utility classes */
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .card-hover:hover { box-shadow: 0 10px 30px -12px rgba(10,10,10,0.12); }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+    .pill-success { background: #ECFDF5; color: #047857; }
+    .pill-warning { background: #FFFBEB; color: #B45309; }
+    .pill-danger  { background: #FEF2F2; color: #B91C1C; }
+    .pill-info    { background: #EFF6FF; color: #1D4ED8; }
+    .pill-neutral { background: #F4F4F5; color: #52525B; }
+
+    .input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border-2);
+      border-radius: 0.75rem;
+      font-size: 0.9375rem;
+      background: white;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .input::placeholder { color: var(--ink-3); }
+
+    .label { display: block; font-size: 0.8125rem; font-weight: 500; color: var(--ink); margin-bottom: 0.5rem; }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      background: var(--primary);
+      color: white;
+      font-weight: 500;
+      font-size: 0.9375rem;
+      border-radius: 0.75rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(10,10,10,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(10,10,10,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    [x-cloak] { display: none !important; }
+
+    /* Scrollbar for sidebar */
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<aside class="sidebar fixed inset-y-0 left-0 z-40 flex flex-col" :class="collapsed && 'collapsed'">
+
+  <!-- Brand -->
+  <div class="h-[60px] border-b border-white/10 flex items-center px-4 sidebar-brand flex-shrink-0">
+    <a href="/app/dashboard/" class="flex items-center gap-3">
+      <span class="inline-flex w-9 h-9 rounded-[10px] items-center justify-center bg-white flex-shrink-0">
+        <svg width="18" height="18" viewBox="0 0 40 40" fill="none">
+          <path d="M12 28V12L28 28V12" stroke="#0A0A0A" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="flex flex-col leading-none sidebar-brand-text">
+        <span class="font-display text-[18px] text-white tracking-tight">Nimbus</span>
+        <span class="text-[9px] uppercase tracking-[0.2em] text-white/40 mt-0.5 font-mono" x-text="user?.org_code || '—'"></span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Nav -->
+  <nav class="sidebar-nav flex-1 overflow-y-auto px-3 py-2">
+    <template x-for="section in navSections" :key="section.title">
+      <div>
+        <div class="nav-section-title" x-text="section.title"></div>
+        <template x-for="item in section.items" :key="item.href">
+          <a
+            :href="item.href"
+            class="nav-item"
+            :class="isActive(item.href) && 'active'"
+            :title="collapsed ? item.label : ''"
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path :d="item.icon" />
+            </svg>
+            <span class="nav-label" x-text="item.label"></span>
+          </a>
+        </template>
+      </div>
+    </template>
+  </nav>
+
+  <!-- User block with dropdown -->
+  <div class="border-t border-white/10 p-3 flex-shrink-0 relative">
+
+    <!-- Popup menu (opens upward) -->
+    <div x-show="userMenu"
+         x-cloak
+         @click.away="userMenu = false"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         class="user-menu-popup absolute bottom-full left-3 right-3 mb-2 rounded-xl bg-[#18181B] border border-white/10 shadow-2xl overflow-hidden z-50">
+
+      <!-- User info header -->
+      <div class="p-4 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-semibold text-[14px] flex-shrink-0" x-text="user?.initial || '?'"></div>
+          <div class="min-w-0 flex-1">
+            <p class="text-[13.5px] font-medium text-white truncate" x-text="user?.name || ''"></p>
+            <p class="text-[11px] text-white/50 truncate" x-text="user?.email || user?.username || ''"></p>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider"
+                :style="'background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);'"
+                x-text="user?.role || ''"></span>
+          <span class="text-[10px] text-white/40 font-mono" x-text="user?.org_code ? '· ' + user.org_code : ''"></span>
+        </div>
+      </div>
+
+      <!-- Menu items -->
+      <div class="py-1">
+        <a href="/app/profile/"
+           @click="userMenu = false"
+           class="flex items-center gap-3 px-4 py-2.5 text-[13.5px] text-white/80 hover:bg-white/5 hover:text-white transition">
+          <svg class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          View profile
+        </a>
+
+        <a href="/app/profile/?edit=1"
+           @click="userMenu = false"
+           class="flex items-center gap-3 px-4 py-2.5 text-[13.5px] text-white/80 hover:bg-white/5 hover:text-white transition">
+          <svg class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+          Edit profile
+        </a>
+
+        <a href="/app/password-change/"
+           @click="userMenu = false"
+           class="flex items-center gap-3 px-4 py-2.5 text-[13.5px] text-white/80 hover:bg-white/5 hover:text-white transition">
+          <svg class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+          </svg>
+          Change password
+        </a>
+      </div>
+
+      <!-- Sign out -->
+      <div class="border-t border-white/10 py-1">
+        <button type="button"
+                @click="signOut()"
+                class="flex items-center gap-3 px-4 py-2.5 text-[13.5px] text-red-400 hover:bg-red-500/10 hover:text-red-300 transition w-full text-left">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          Sign out
+        </button>
+      </div>
+    </div>
+
+    <!-- Trigger -->
+    <div class="user-block flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition"
+         @click="userMenu = !userMenu">
+      <div class="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-semibold text-[13px] flex-shrink-0"
+           x-text="user?.initial || '?'"></div>
+      <div class="flex-1 min-w-0 user-meta">
+        <p class="text-[13px] font-medium text-white truncate" x-text="user?.name || 'Loading…'"></p>
+        <p class="text-[11px] text-white/50 truncate font-mono" x-text="user?.role || ''"></p>
+      </div>
+      <svg class="chevron w-4 h-4 text-white/40 transition-transform"
+           :class="userMenu && 'rotate-180'"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+      </svg>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════ TOPBAR + MAIN ═══════════════════ -->
+<div class="main-wrapper min-h-screen flex flex-col">
+  <header class="topbar flex items-center px-4 lg:px-6 gap-4 flex-shrink-0">
+    <!-- Sidebar toggle -->
+    <button @click="collapsed = !collapsed"
+            class="p-2 rounded-lg text-[var(--ink-2)] hover:bg-black/5 transition"
+            aria-label="Toggle sidebar">
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </button>
+
+    <!-- Breadcrumbs / page title -->
+    <div class="flex-1 min-w-0">
+      <h1 class="font-display text-[20px] sm:text-[22px] tracking-tight truncate">{% block page_title %}Dashboard{% endblock %}</h1>
+    </div>
+
+    <!-- Right actions -->
+    <div class="flex items-center gap-2">
+      <!-- Search -->
+      <button class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)] text-[13px] text-[var(--ink-3)] hover:border-[var(--border-2)] transition">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <span>Search…</span>
+        <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--cream)] border border-[var(--border)]">⌘K</span>
+      </button>
+
+      <!-- Quick action -->
+      <a href="/app/applications/"
+         class="hidden md:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--ink)] text-white text-[13px] font-medium hover:opacity-90 transition">
+        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        New Application
+      </a>
+
+      <!-- Notifications -->
+      <button class="relative p-2 rounded-lg text-[var(--ink-2)] hover:bg-black/5 transition" aria-label="Notifications">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+        <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--accent)]"></span>
+      </button>
+
+      <!-- User avatar (mobile) -->
+      <div class="md:hidden w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-semibold text-[12px]" x-text="user?.initial || '?'"></div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="flex-1 p-4 lg:p-8">
+    <div class="max-w-[1400px] mx-auto">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════ ALPINE APP SHELL ═══════════════════ -->
+<script>
+// Check localStorage for theme preference
+if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  document.documentElement.classList.add('dark');
+} else {
+   document.documentElement.classList.remove('dark');
+}
+function appShell() {
+  return {
+    collapsed: false,
+    userMenu: false,
+
+    user: {
+      name: 'Loading…',
+      username: '',
+      email: '',
+      role: '',
+      role_key: '',
+      initial: '?',
+      org_code: '',
+      branch_code: '',
+    },
+
+    navSections: [],
+
+    // ---- Boot ----
+    async init() {
+      await this.loadUser();
+      if (!this.user.username) return; // redirect already handled
+      this.navSections = this.buildNav();
+    },
+
+    // ---- Token helpers ----
+    getToken() {
+      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    },
+
+    parseJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(atob(base64).split('').map(c =>
+          '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(''));
+        return JSON.parse(json);
+      } catch { return null; }
+    },
+
+    async loadUser() {
+      const token = this.getToken();
+      if (!token) { window.location.href = '/login/'; return; }
+
+      const payload = this.parseJwt(token);
+      if (!payload || (payload.exp * 1000) < Date.now()) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = '/login/';
+        return;
+      }
+
+      this.user = {
+        username: payload.username,
+        name: payload.username,
+        email: '',
+        role: (payload.role || '').replace(/_/g, ' '),
+        role_key: payload.role,
+        initial: (payload.username || '?')[0].toUpperCase(),
+        org_code: payload.organization_code || '',
+        branch_code: payload.branch_code || '',
+      };
+
+      // Fetch full profile for name + email
+      try {
+        const r = await fetch('/api/auth/me/', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (r.ok) {
+          const profile = await r.json();
+          const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
+          this.user.name       = fullName || profile.username;
+          this.user.email      = profile.email || '';
+          this.user.username   = profile.username;
+          this.user.role_key   = profile.role;
+          this.user.role       = (profile.role || '').replace(/_/g, ' ');
+          this.user.org_code   = profile.organization_code || this.user.org_code;
+          this.user.branch_code = profile.branch_code || this.user.branch_code;
+          this.user.initial    = (profile.username || '?')[0].toUpperCase();
+        }
+      } catch (_) { /* non-fatal */ }
+    },
+
+    // ---- Sign out ----
+    signOut() {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('refresh_token');
+
+      fetch('/logout/', { credentials: 'include' }).catch(() => {});
+      window.location.href = '/login/';
+    },
+
+    // ---- Routing helpers ----
+    isActive(href) {
+      const path = window.location.pathname;
+      if (href === '/app/dashboard/') {
+        return path === '/app/dashboard/' || path === '/app/';
+      }
+      if (path === href) return true;
+      if (!path.startsWith(href)) return false;
+      const allHrefs = this.navSections.flatMap(s => s.items.map(i => i.href));
+      const hasLongerMatch = allHrefs.some(h =>
+        h !== href && h.length > href.length && path.startsWith(h)
+      );
+      return !hasLongerMatch;
+    },
+
+    // ---- Nav builder ----
+    // ---- Nav builder ----
+    buildNav() {
+      if (!window.NimbusNav) {
+        console.error('nav.js not loaded — falling back to empty nav.');
+        return [];
+      }
+      
+      let sections = window.NimbusNav.build(this.user.role_key);
+
+      // --- BULLETPROOF FALLBACK ---
+      if (this.user.role_key === 'HR_PAYROLL' || this.user.role_key === 'HQ_ADMIN') {
+        
+        // 1. Ensure HR & Payroll section exists
+        const hasHR = sections.some(s => s.title === 'HR & Payroll');
+        if (!hasHR) {
+            sections.push({
+                title: 'HR & Payroll',
+                items: [
+                    {
+                        label: 'Payroll Dashboard',
+                        href: '/app/payroll/',
+                        icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                    },
+                    {
+                        label: 'Payroll Runs',
+                        href: '/app/payroll/runs/',
+                        icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+                    }
+                ]
+            });
+        }
+
+        // 2. Redirect the main Dashboard link to Payroll for HR users
+        if (this.user.role_key === 'HR_PAYROLL') {
+            const mainSection = sections.find(s => s.title === 'Main');
+            if (mainSection) {
+                const dashItem = mainSection.items.find(i => i.label === 'Dashboard');
+                if (dashItem) {
+                    dashItem.href = '/app/payroll/'; // HR clicks Dashboard -> goes to Payroll
+                }
+            }
+        }
+      }
+
+      return sections;
+    },
+  };
+}
+
+// Register Alpine component
+document.addEventListener('alpine:init', () => {
+  Alpine.data('appShell', appShell);
+});
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

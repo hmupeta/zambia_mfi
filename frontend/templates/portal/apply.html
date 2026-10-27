@@ -1,0 +1,59 @@
+{% extends "portal/base_portal.html" %}
+{% block title %}Apply for a Loan{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="font-display text-[28px] sm:text-[32px] leading-tight">Apply for a Loan</h1>
+  <p class="text-[14px] text-[var(--ink-3)] mt-1">Tell us what you need. We'll review and get back to you.</p>
+</div>
+
+{% if error %}
+  <div class="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-[13.5px]">{{ error }}</div>
+{% endif %}
+
+{% if not products %}
+  <div class="card p-8 text-center">
+    <p class="text-[15px] text-[var(--ink-2)]">No loan products are currently available at your branch.</p>
+    <p class="text-[13px] text-[var(--ink-3)] mt-2">Please visit your nearest branch for assistance.</p>
+  </div>
+{% else %}
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <div class="card p-6 mb-4 space-y-5">
+    <h2 class="font-display text-[18px]">Loan details</h2>
+
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Loan Product *</label>
+      {{ form.loan_product }}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Amount (ZMW) *</label>
+        {{ form.amount }}
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Term (months) *</label>
+        {{ form.term_months }}
+      </div>
+    </div>
+
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Purpose *</label>
+      {{ form.purpose }}
+    </div>
+
+    <div>
+      <label class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1.5 block">Additional notes</label>
+      {{ form.purpose_notes }}
+    </div>
+  </div>
+
+  <div class="flex justify-between gap-3">
+    <a href="/portal/" class="btn-secondary">Cancel</a>
+    <button type="submit" class="btn-primary">Submit application</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

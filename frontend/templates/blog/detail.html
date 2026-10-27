@@ -1,0 +1,45 @@
+{% extends "base_public.html" %}
+{% load nimbus_content %}
+
+{% block title %}{{ post.meta_title|default:post.title }}{% endblock %}
+
+{% block content %}
+<article class="bg-white">
+  <header class="max-w-[760px] mx-auto px-6 pt-20 pb-10">
+    {% if post.category %}<div class="eyebrow mb-4">{{ post.category }}</div>{% endif %}
+    <h1 class="font-display text-[44px] sm:text-[56px] leading-[1.05] text-[var(--ink)]">{{ post.title }}</h1>
+    <div class="mt-6 flex items-center gap-3 text-[13px] text-[var(--ink-3)]">
+      {% if post.author %}<span>{{ post.author.get_full_name|default:post.author.username }}</span><span>·</span>{% endif %}
+      <span>{{ post.published_at|date:"F j, Y" }}</span>
+      <span>·</span>
+      <span>{{ post.views }} views</span>
+    </div>
+  </header>
+
+  {% if post.cover_image %}
+  <div class="max-w-[960px] mx-auto px-6 pb-12">
+    <img src="{{ post.cover_image.url }}" alt="{{ post.title }}" class="w-full rounded-2xl border border-[var(--border)]" />
+  </div>
+  {% endif %}
+
+  <div class="max-w-[760px] mx-auto px-6 pb-20 prose-nimbus text-[17px] text-[var(--ink-2)] leading-[1.8]">
+    {{ post.body|markdownify }}
+  </div>
+</article>
+
+{% if related %}
+<section class="py-16 bg-[var(--cream)]">
+  <div class="max-w-[1280px] mx-auto px-6">
+    <h2 class="font-display text-[28px] text-[var(--ink)] mb-8">More from the blog</h2>
+    <div class="grid sm:grid-cols-3 gap-6">
+      {% for p in related %}
+      <a href="/blog/{{ p.slug }}/" class="block bg-white rounded-2xl p-6 border border-[var(--border)] card-lift">
+        <h3 class="font-display text-[19px] text-[var(--ink)] mb-2">{{ p.title }}</h3>
+        <p class="text-[13.5px] text-[var(--ink-2)] line-clamp-2">{{ p.excerpt }}</p>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

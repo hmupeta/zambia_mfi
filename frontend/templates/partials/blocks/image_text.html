@@ -1,0 +1,26 @@
+<section class="py-20 bg-{% if block.background == 'cream' %}[var(--cream)]{% elif block.background == 'dark' %}[#0A0A0A]{% else %}white{% endif %}">
+  <div class="max-w-[1280px] mx-auto px-6">
+    <div class="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center {% if block.alignment == 'right' %}lg:[direction:rtl]{% endif %}">
+      <div class="{% if block.alignment == 'right' %}lg:[direction:ltr]{% endif %}">
+        {% if block.title %}
+        <h2 class="font-display text-[36px] sm:text-[44px] leading-[1.1] text-{% if block.background == 'dark' %}white{% else %}[var(--ink)]{% endif %} mb-5">
+          {{ block.title }}
+        </h2>
+        {% endif %}
+        <div class="text-[16px] text-{% if block.background == 'dark' %}[#A1A1AA]{% else %}[var(--ink-2)]{% endif %} leading-[1.75] prose-nimbus">
+          {{ block.body|markdownify }}
+        </div>
+        {% if block.cta_text %}
+        <a href="{{ block.cta_url|default:'#' }}" class="btn-primary mt-8">
+          {{ block.cta_text }}
+        </a>
+        {% endif %}
+      </div>
+      <div class="{% if block.alignment == 'right' %}lg:[direction:ltr]{% endif %}">
+        {% if block.image %}
+        <img src="{{ block.image.url }}" alt="{{ block.title }}" class="w-full rounded-2xl border border-[var(--border)] shadow-[0_20px_60px_-20px_rgba(10,10,10,0.15)]" />
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>

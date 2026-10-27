@@ -1,0 +1,72 @@
+{% extends 'app/base_app.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-8 px-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-display font-semibold text-gray-900">Payroll Runs</h1>
+        <a href="{% url 'payroll-dashboard' %}" class="text-sm text-gray-500 hover:text-gray-900">&larr; Back to Dashboard</a>
+    </div>
+
+    <!-- Create Run -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Start a New Payroll Run</h2>
+        {% if open_periods %}
+        <form method="POST" action="{% url 'payroll-run-create' %}" class="flex items-end gap-4">
+            {% csrf_token %}
+            <div class="flex-1 max-w-md">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Select Payroll Period</label>
+                <select name="period_id" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--accent)] focus:ring-[var(--accent)]">
+                    <option value="">-- Select an Open Period --</option>
+                    {% for period in open_periods %}
+                        <option value="{{ period.id }}">{{ period.name }} ({{ period.start_date|date:"d M" }} - {{ period.end_date|date:"d M Y" }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="px-5 py-2.5 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800">
+                Create Draft Run
+            </button>
+        </form>
+        {% else %}
+        <div class="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200">
+            There are no open payroll periods available. Please <a href="{% url 'payroll-periods' %}" class="font-bold underline">create a new period</a> first.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Runs Table -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Period</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Created</th>
+                    <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for run in runs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-medium text-gray-900">{{ run.period.name }}</td>
+                    <td class="px-6 py-4">
+                        {% if run.status == 'COMPLETED' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Completed</span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Draft</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ run.created_at|date:"d M Y" }}</td>
+                    <td class="px-6 py-4 text-right">
+                        <a href="{% url 'payroll-run-detail' run.id %}" class="text-sm font-medium text-[var(--accent)] hover:underline">Open</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="px-6 py-8 text-center text-gray-500 italic">No payroll runs found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

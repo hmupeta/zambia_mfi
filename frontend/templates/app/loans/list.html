@@ -1,0 +1,424 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Loans — Nimbus{% endblock %}
+{% block page_title %}Loans{% endblock %}
+
+{% block content %}
+<div x-data="loansPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" %}
+
+  <!-- Stats bar -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <button @click="clearFilters()" class="card card-hover p-4 text-left transition">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Total Loans</p>
+      <p class="text-[26px] font-display mt-1" x-text="stats.total ?? '—'"></p>
+    </button>
+    <button @click="setStatusFilter('ACTIVE')" class="card card-hover p-4 text-left transition"
+            :class="filterStatus === 'ACTIVE' && 'ring-2 ring-blue-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Active</p>
+      <p class="text-[26px] font-display mt-1 text-blue-700" x-text="stats.active ?? '—'"></p>
+    </button>
+    <button @click="setOverdueFilter()" class="card card-hover p-4 text-left transition"
+            :class="filterOverdue && 'ring-2 ring-amber-200'">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">In Arrears</p>
+      <p class="text-[26px] font-display mt-1 text-amber-700" x-text="stats.in_arrears ?? '—'"></p>
+    </button>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Portfolio Balance</p>
+      <p class="text-[22px] font-mono mt-1" x-text="fmtK(stats.portfolio)"></p>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="card p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="relative flex-1 min-w-[240px]">
+        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)] pointer-events-none"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" x-model.debounce.400ms="search" @input="reload()"
+               placeholder="Loan #, client name, client code…" class="input !py-2 !pl-10 !pr-9" />
+        <button x-show="search" x-cloak @click="search=''; reload()"
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--ink-3)] hover:text-[var(--ink)]">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <select x-model="filterBranch" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All branches</option>
+        <template x-for="b in branches" :key="b.id">
+          <option :value="b.id" x-text="b.code + ' — ' + b.name"></option>
+        </template>
+      </select>
+
+      <select x-model="filterOfficer" @change="reload()" class="input !py-2 !w-auto">
+        <option value="">All officers</option>
+        <template x-for="o in officers" :key="o.id">
+          <option :value="o.id" x-text="o.full_name || o.username"></option>
+        </template>
+      </select>
+
+      <select x-model="ordering" @change="reload()" class="input !py-2 !w-auto">
+        <option value="-created_at">Newest first</option>
+        <option value="-balance_due">Largest balance</option>
+        <option value="maturity_date">Earliest maturity</option>
+        <option value="loan_number">Loan # (A→Z)</option>
+      </select>
+
+      <div class="flex-1"></div>
+
+      <button @click="reload()" :disabled="loading" class="p-2 rounded-lg text-[var(--ink-2)] hover:bg-black/5 transition">
+        <svg class="w-4 h-4" :class="loading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
+
+      <button @click="exportCsv()" :disabled="!rows.length" class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+        Export
+      </button>
+    </div>
+
+    <!-- Status tabs -->
+    <div class="flex flex-wrap gap-1 mt-3 pt-3 border-t border-[var(--border)]">
+      <template x-for="tab in tabs" :key="tab.key">
+        <button @click="setStatusFilter(tab.key)"
+                :class="filterStatus === tab.key ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-2)] hover:bg-black/5'"
+                class="px-3 py-1.5 text-[12.5px] font-medium rounded-md transition"
+                x-text="tab.label"></button>
+      </template>
+      <button @click="setOverdueFilter()"
+              :class="filterOverdue ? 'bg-amber-500 text-white' : 'text-amber-700 hover:bg-amber-50'"
+              class="px-3 py-1.5 text-[12.5px] font-medium rounded-md transition">
+        Overdue only
+      </button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card p-0 overflow-hidden">
+    <div x-show="loading && !rows.length" class="p-4 space-y-3">
+      <template x-for="i in 5" :key="i">
+        <div class="flex items-center gap-4 animate-pulse">
+          <div class="h-4 bg-[var(--cream)] rounded w-[100px]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded flex-1"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[120px]"></div>
+          <div class="h-4 bg-[var(--cream)] rounded w-[80px]"></div>
+        </div>
+      </template>
+    </div>
+
+    <div x-show="!loading && rows.length === 0" class="p-16 text-center">
+      <h3 class="font-display text-[20px] tracking-tight mb-1"
+          x-text="hasActiveFilters ? 'No loans match these filters' : 'No loans yet'"></h3>
+      <p class="text-[13px] text-[var(--ink-3)] mb-4"
+         x-text="hasActiveFilters ? 'Try clearing filters.' : 'Loans will appear here once disbursed.'"></p>
+      <button x-show="hasActiveFilters" @click="clearFilters()" class="btn-secondary !py-2 !px-4 !text-[13px] !w-auto">
+        Clear filters
+      </button>
+    </div>
+
+    <table x-show="!loading || rows.length > 0" class="w-full text-[13px]">
+      <thead class="bg-[var(--cream)] border-b border-[var(--border)]">
+        <tr class="text-left text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+          <th class="px-3 py-3 font-medium">Loan #</th>
+          <th class="px-3 py-3 font-medium">Client</th>
+          <th class="px-3 py-3 font-medium">Product</th>
+          <th class="px-3 py-3 font-medium">Officer</th>
+          <th class="px-3 py-3 font-medium text-right">Principal</th>
+          <th class="px-3 py-3 font-medium text-right">Balance</th>
+          <th class="px-3 py-3 font-medium text-center">DPD</th>
+          <th class="px-3 py-3 font-medium">Status</th>
+          <th class="px-4 py-3 font-medium text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[var(--border)]">
+        <template x-for="l in rows" :key="l.id">
+          <tr class="hover:bg-[var(--cream)] transition group cursor-pointer" @click="goDetail(l.id)">
+            <td class="px-3 py-3 font-mono text-[12px] font-medium" x-text="l.loan_number"></td>
+            <td class="px-3 py-3">
+              <p class="font-medium truncate max-w-[180px]" x-text="l.client_name || '—'"></p>
+              <p class="text-[11.5px] text-[var(--ink-3)] font-mono" x-text="l.client_code || ''"></p>
+            </td>
+            <td class="px-3 py-3 text-[12px] text-[var(--ink-2)] truncate max-w-[140px]"
+                x-text="l.product_name || '—'"></td>
+            <td class="px-3 py-3 text-[12px] text-[var(--ink-2)] truncate max-w-[140px]"
+                x-text="l.officer_name || '—'"></td>
+            <td class="px-3 py-3 text-right font-mono text-[12px]" x-text="fmtK(l.amount)"></td>
+            <td class="px-3 py-3 text-right font-mono font-medium" x-text="fmtK(l.balance_due)"></td>
+            <td class="px-3 py-3 text-center">
+              <span class="inline-flex items-center justify-center min-w-[32px] px-1.5 py-0.5 rounded-md font-mono text-[11.5px]"
+                    :class="dpdClass(l.days_past_due)"
+                    x-text="l.days_past_due ?? 0"></span>
+            </td>
+            <td class="px-3 py-3">
+              <span class="pill" :class="statusPill(l.status)" x-text="l.status_display || l.status"></span>
+            </td>
+            <td class="px-4 py-3 text-right" @click.stop>
+              <a :href="'/app/loans/' + l.id + '/'"
+                 class="text-[12.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium">View</a>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-[13px]">
+    <span class="text-[var(--ink-3)] font-mono text-[12px]">
+      Showing <span x-text="rangeStart"></span>–<span x-text="rangeEnd"></span> of <span x-text="total"></span>
+    </span>
+    <div class="flex items-center gap-1">
+      <button @click="prevPage()" :disabled="!prevUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed">
+        ← Prev
+      </button>
+      <template x-for="p in pageNumbers" :key="p">
+        <button @click="goToPage(p)"
+                class="min-w-[32px] px-2.5 py-1.5 rounded-lg text-[12.5px] font-mono transition"
+                :class="p === currentPage ? 'bg-[var(--ink)] text-white' : 'border border-[var(--border)] hover:bg-[var(--cream)]'"
+                x-text="p"></button>
+      </template>
+      <button @click="nextPage()" :disabled="!nextUrl"
+              class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[12.5px] font-medium hover:bg-[var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed">
+        Next →
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="fixed bottom-6 right-6 z-[60] space-y-2 pointer-events-none">
+    <template x-for="t in toasts" :key="t.id">
+      <div x-show="t.visible"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 translate-y-2"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border bg-white border-[var(--border)] min-w-[280px]">
+        <span class="text-[13px] flex-1" x-text="t.message"></span>
+        <button @click="t.visible = false" class="text-[var(--ink-3)] hover:text-[var(--ink)]">×</button>
+      </div>
+    </template>
+  </div>
+</div>
+
+<script>
+function loansPage() {
+  const API = '/api/loans/admin';
+
+  return {
+    rows: [],
+    branches: [],
+    officers: [],
+    loading: false,
+
+    search: '',
+    filterStatus: '',
+    filterBranch: '',
+    filterOfficer: '',
+    filterOverdue: false,
+    ordering: '-created_at',
+
+    total: 0, pageSize: 25, nextUrl: null, prevUrl: null, currentPage: 1,
+
+    stats: { total: null, active: null, in_arrears: null, portfolio: null },
+
+    tabs: [
+      { key: '',           label: 'All' },
+      { key: 'ACTIVE',     label: 'Active' },
+      { key: 'DISBURSED',  label: 'Disbursed' },
+      { key: 'CLOSED',     label: 'Closed' },
+      { key: 'WRITTEN_OFF', label: 'Written off' },
+    ],
+
+    toasts: [], _toastId: 0,
+
+    async init() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('search')) this.search = params.get('search');
+      if (params.get('status')) this.filterStatus = params.get('status');
+      if (params.get('branch')) this.filterBranch = params.get('branch');
+      if (params.get('officer')) this.filterOfficer = params.get('officer');
+      if (params.get('overdue') === 'true') this.filterOverdue = true;
+      if (params.get('ordering')) this.ordering = params.get('ordering');
+      if (params.get('page')) this.currentPage = parseInt(params.get('page')) || 1;
+
+      await Promise.all([this.loadBranches(), this.loadOfficers(), this.loadStats(), this.reload()]);
+    },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + this.getToken(), ...extra }; },
+
+    get hasActiveFilters() {
+      return !!(this.search || this.filterStatus || this.filterBranch || this.filterOfficer || this.filterOverdue);
+    },
+    get rangeStart() { return this.total === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1; },
+    get rangeEnd()   { return Math.min(this.currentPage * this.pageSize, this.total); },
+    get totalPages() { return Math.max(1, Math.ceil(this.total / this.pageSize)); },
+    get pageNumbers() {
+      const t = this.totalPages, c = this.currentPage, max = 5;
+      let s = Math.max(1, c - Math.floor(max / 2));
+      let e = Math.min(t, s + max - 1);
+      s = Math.max(1, e - max + 1);
+      const pages = []; for (let i = s; i <= e; i++) pages.push(i); return pages;
+    },
+
+    buildQuery() {
+      const p = new URLSearchParams();
+      p.set('page_size', this.pageSize);
+      if (this.search) p.set('search', this.search);
+      if (this.filterStatus) p.set('status', this.filterStatus);
+      if (this.filterBranch) p.set('branch', this.filterBranch);
+      if (this.filterOfficer) p.set('loan_officer', this.filterOfficer);
+      if (this.filterOverdue) p.set('overdue', 'true');
+      p.set('ordering', this.ordering);
+      if (this.currentPage > 1) p.set('page', this.currentPage);
+      return p.toString();
+    },
+
+    async reload() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/?${this.buildQuery()}`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load loans');
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.total = d.count ?? this.rows.length;
+        this.nextUrl = d.next;
+        this.prevUrl = d.previous;
+        this.syncUrl();
+      } catch (e) { this.toast(e.message, 'error'); }
+      finally { this.loading = false; }
+    },
+
+    async loadBranches() {
+      try {
+        const r = await fetch('/api/auth/branches/?page_size=200&ordering=code', { headers: this.authHeaders() });
+        if (r.ok) { const d = await r.json(); this.branches = d.results || d; }
+      } catch (_) {}
+    },
+
+    async loadOfficers() {
+      try {
+        const r = await fetch('/api/auth/users/?page_size=200&role=LOAN_OFFICER&ordering=first_name', { headers: this.authHeaders() });
+        if (r.ok) { const d = await r.json(); this.officers = d.results || d; }
+      } catch (_) {}
+    },
+
+    async loadStats() {
+      try {
+        const r = await fetch(`${API}/stats/`, { headers: this.authHeaders() });
+        if (r.ok) this.stats = await r.json();
+      } catch (_) {}
+    },
+
+    syncUrl() {
+      const p = new URLSearchParams();
+      if (this.search) p.set('search', this.search);
+      if (this.filterStatus) p.set('status', this.filterStatus);
+      if (this.filterBranch) p.set('branch', this.filterBranch);
+      if (this.filterOfficer) p.set('officer', this.filterOfficer);
+      if (this.filterOverdue) p.set('overdue', 'true');
+      if (this.ordering !== '-created_at') p.set('ordering', this.ordering);
+      if (this.currentPage > 1) p.set('page', this.currentPage);
+      const qs = p.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
+    },
+
+    clearFilters() {
+      this.search = ''; this.filterStatus = ''; this.filterBranch = '';
+      this.filterOfficer = ''; this.filterOverdue = false;
+      this.ordering = '-created_at'; this.currentPage = 1;
+      this.reload();
+    },
+    setStatusFilter(k) {
+      this.filterStatus = this.filterStatus === k ? '' : k;
+      this.filterOverdue = false;
+      this.currentPage = 1; this.reload();
+    },
+    setOverdueFilter() {
+      this.filterOverdue = !this.filterOverdue;
+      this.filterStatus = '';
+      this.currentPage = 1; this.reload();
+    },
+
+    nextPage() { if (this.nextUrl) { this.currentPage++; this.loadFromUrl(this.nextUrl); } },
+    prevPage() { if (this.prevUrl) { this.currentPage = Math.max(1, this.currentPage - 1); this.loadFromUrl(this.prevUrl); } },
+    goToPage(n) { if (n !== this.currentPage) { this.currentPage = n; this.reload(); } },
+
+    async loadFromUrl(url) {
+      this.loading = true;
+      try {
+        const r = await fetch(url, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Failed to load page');
+        const d = await r.json();
+        this.rows = d.results || d;
+        this.nextUrl = d.next; this.prevUrl = d.previous;
+        this.syncUrl();
+      } catch (e) { this.toast(e.message, 'error'); }
+      finally { this.loading = false; }
+    },
+
+    goDetail(id) { window.location.href = '/app/loans/' + id + '/'; },
+
+    dpdClass(dpd) {
+      const n = Number(dpd || 0);
+      if (n === 0) return 'bg-emerald-100 text-emerald-800';
+      if (n <= 30) return 'bg-amber-100 text-amber-800';
+      if (n <= 90) return 'bg-orange-100 text-orange-800';
+      return 'bg-red-100 text-red-800';
+    },
+
+    statusPill(s) {
+      return {
+        ACTIVE: 'pill-success', DISBURSED: 'pill-info', CURRENT: 'pill-success',
+        IN_ARREARS: 'pill-warning', DEFAULTED: 'pill-danger',
+        CLOSED: 'pill-neutral', WRITTEN_OFF: 'pill-danger',
+        RESTRUCTURED: 'pill-warning', PENDING: 'pill-neutral', APPROVED: 'pill-info',
+      }[s] || 'pill-neutral';
+    },
+
+    fmtK(v) {
+      if (v == null) return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    exportCsv() {
+      if (!this.rows.length) return;
+      const headers = ['Loan #', 'Client', 'Product', 'Officer', 'Principal', 'Balance', 'DPD', 'Status'];
+      const lines = [headers.join(',')];
+      for (const l of this.rows) {
+        lines.push([
+          l.loan_number, l.client_name || '', l.product_name || '', l.officer_name || '',
+          l.amount, l.balance_due, l.days_past_due ?? 0, l.status_display || l.status,
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `loans-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toast(`Exported ${this.rows.length} loans.`);
+    },
+
+    toast(message, type = 'success') {
+      const id = ++this._toastId;
+      this.toasts.push({ id, message, type, visible: true });
+      setTimeout(() => { this.toasts = this.toasts.filter(x => x.id !== id); }, 3500);
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('loansPage', loansPage);
+});
+</script>
+{% endblock %}

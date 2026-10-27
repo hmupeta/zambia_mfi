@@ -1,0 +1,452 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+
+{% block title %}Payment — Nimbus{% endblock %}
+{% block page_title %}Payment Detail{% endblock %}
+
+{% block content %}
+<div x-data="paymentDetailPage" x-init="init()" x-cloak>
+
+  {% include "partials/breadcrumbs.html" with x_binding="payment?.payment_number || 'Payment'" %}
+
+  <div x-show="error" x-cloak
+       class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800"
+       x-text="error"></div>
+
+  <div x-show="message" x-cloak
+       class="mb-6 rounded-xl border px-4 py-3 text-[14px]"
+       :class="messageType === 'error'
+               ? 'border-red-200 bg-red-50 text-red-800'
+               : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+       x-text="message"></div>
+
+  <div x-show="loading && !payment" class="animate-pulse space-y-6">
+    <div class="h-40 rounded-2xl bg-[var(--cream)]"></div>
+    <div class="h-96 rounded-2xl bg-[var(--cream)]"></div>
+  </div>
+
+  <template x-if="payment">
+    <div class="space-y-6">
+
+      <!-- ═══ Header ═══ -->
+      <div class="card p-6 lg:p-8">
+        <div class="flex items-start justify-between gap-6 flex-wrap">
+          <div class="flex items-start gap-5 min-w-0">
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[26px] font-display flex-shrink-0"
+                 :style="'background: ' + (payment.is_reversed ? '#B91C1C' : '#047857')"
+                 x-text="payment.is_reversed ? '×' : '✓'"></div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-3 flex-wrap">
+                <h2 class="font-display text-[26px] tracking-tight font-mono"
+                    x-text="payment.payment_number"></h2>
+                <span class="pill"
+                      :class="payment.is_reversed ? 'pill-danger' : 'pill-success'"
+                      x-text="payment.is_reversed ? 'Reversed' : 'Active'"></span>
+              </div>
+              <div class="mt-2 flex items-center gap-4 text-[13.5px] text-[var(--ink-2)] flex-wrap">
+                <a x-show="payment.client"
+                   :href="'/app/clients/' + payment.client + '/'"
+                   class="hover:text-[var(--accent)] transition font-medium"
+                   x-text="payment.client_name || 'Client'"></a>
+                <span class="font-mono text-[12px] text-[var(--ink-3)]"
+                      x-text="payment.client_code || ''"></span>
+                <a x-show="payment.loan"
+                   :href="'/app/loans/' + payment.loan + '/'"
+                   class="font-mono text-[12px] text-[var(--ink-3)] hover:text-[var(--accent)] transition"
+                   x-text="payment.loan_number || ''"></a>
+              </div>
+              <p class="mt-1 text-[12.5px] text-[var(--ink-3)] font-mono"
+                 x-text="fmtDateTime(payment.received_at) + (payment.received_by_name ? ' · by ' + payment.received_by_name : '')"></p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Amount</p>
+            <p class="font-display text-[32px] tracking-tight mt-1 tabular-nums"
+               :class="payment.is_reversed ? 'text-red-700 line-through' : 'text-emerald-700'"
+               x-text="'+ ' + fmtK(payment.amount)"></p>
+          </div>
+        </div>
+
+        <!-- Reversal banner -->
+        <div x-show="payment.is_reversed"
+             class="mt-5 p-4 rounded-xl bg-red-50 border border-red-200">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="flex-1 min-w-0">
+              <p class="text-[13.5px] font-medium text-red-900">Payment Reversed</p>
+              <p class="text-[12.5px] text-red-800 mt-1" x-text="payment.reversal_reason"></p>
+              <p class="text-[11.5px] text-red-700 font-mono mt-2">
+                Reversed <span x-text="fmtDate(payment.reversed_at)"></span>
+                <span x-show="payment.reversed_by_name"> · by <span x-text="payment.reversed_by_name"></span></span>
+                <span x-show="payment.reversal_journal_ref"> · JE <span x-text="payment.reversal_journal_ref"></span></span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ KPI cards ═══ -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Method</p>
+          <p class="text-[16px] font-medium mt-1" x-text="payment.method_display || payment.payment_method"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Type</p>
+          <p class="text-[16px] font-medium mt-1" x-text="prettyType(payment.payment_type)"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Reference</p>
+          <p class="text-[14px] font-mono mt-1 truncate" x-text="payment.transaction_ref || '—'"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono">Branch</p>
+          <p class="text-[16px] font-mono mt-1" x-text="payment.branch_code || '—'"></p>
+        </div>
+      </div>
+
+      <!-- ═══ Main grid ═══ -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- LEFT: Allocation table -->
+        <div class="lg:col-span-2 card p-0 overflow-hidden">
+          <div class="px-5 py-3 border-b border-[var(--border)] bg-[var(--cream)] flex items-center justify-between">
+            <h3 class="font-display text-[18px] tracking-tight">Allocation Breakdown</h3>
+            <span class="text-[11px] font-mono text-[var(--ink-3)]"
+                  x-text="(payment.allocations || []).length + ' installment' + ((payment.allocations || []).length === 1 ? '' : 's')"></span>
+          </div>
+
+          <div x-show="!(payment.allocations || []).length" class="p-8 text-center text-[13px] text-[var(--ink-3)]">
+            No allocation records for this payment.
+          </div>
+
+          <template x-if="(payment.allocations || []).length > 0">
+            <div class="overflow-x-auto">
+              <table class="w-full text-[13px]">
+                <thead class="border-b border-[var(--border)]">
+                  <tr class="text-left text-[10.5px] uppercase tracking-wider text-[var(--ink-3)] font-mono">
+                    <th class="px-4 py-2.5 font-medium">Installment</th>
+                    <th class="px-3 py-2.5 font-medium">Due Date</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Penalty</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Interest</th>
+                    <th class="px-3 py-2.5 font-medium text-right">Principal</th>
+                    <th class="px-4 py-2.5 font-medium text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--border)]">
+                  <template x-for="a in payment.allocations" :key="a.id">
+                    <tr class="hover:bg-[var(--cream)] transition">
+                      <td class="px-4 py-2.5 font-mono text-[12px]">
+                        #<span x-text="a.installment_no"></span>
+                      </td>
+                      <td class="px-3 py-2.5 font-mono text-[12px] text-[var(--ink-3)]"
+                          x-text="fmtDate(a.installment_due_date)"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]"
+                          x-text="parseFloat(a.penalty_portion) > 0 ? fmtK(a.penalty_portion) : '—'"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]"
+                          x-text="parseFloat(a.interest_portion) > 0 ? fmtK(a.interest_portion) : '—'"></td>
+                      <td class="px-3 py-2.5 text-right font-mono text-[12px]"
+                          x-text="parseFloat(a.principal_portion) > 0 ? fmtK(a.principal_portion) : '—'"></td>
+                      <td class="px-4 py-2.5 text-right font-mono font-medium"
+                          x-text="fmtK(parseFloat(a.penalty_portion || 0) + parseFloat(a.interest_portion || 0) + parseFloat(a.principal_portion || 0))"></td>
+                    </tr>
+                  </template>
+                </tbody>
+                <tfoot class="border-t-2 border-[var(--border)] bg-[var(--cream)]">
+                  <tr class="text-[12px] font-medium">
+                    <td colspan="2" class="px-4 py-3 text-right text-[var(--ink-3)] font-mono uppercase tracking-wider text-[10.5px]">Totals</td>
+                    <td class="px-3 py-3 text-right font-mono" x-text="fmtK(totals.penalty)"></td>
+                    <td class="px-3 py-3 text-right font-mono" x-text="fmtK(totals.interest)"></td>
+                    <td class="px-3 py-3 text-right font-mono" x-text="fmtK(totals.principal)"></td>
+                    <td class="px-4 py-3 text-right font-mono font-semibold text-[13px]" x-text="fmtK(totals.subtotal)"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </template>
+        </div>
+
+        <!-- RIGHT: Details + Actions -->
+        <div class="space-y-6">
+
+          <!-- Details -->
+          <div class="card p-5">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Payment Details</h3>
+            <dl class="space-y-2.5 text-[13px]">
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Date Received</dt>
+                <dd class="text-right font-mono text-[12px]" x-text="fmtDateTime(payment.received_at)"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">Received By</dt>
+                <dd class="text-right" x-text="payment.received_by_name || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1 border-b border-[var(--border)]">
+                <dt class="text-[var(--ink-3)]">GL Journal</dt>
+                <dd class="text-right font-mono text-[12px]"
+                    x-text="payment.journal_ref || '—'"></dd>
+              </div>
+              <div class="flex justify-between gap-3 py-1" x-show="payment.loan_balance != null">
+                <dt class="text-[var(--ink-3)]">Loan Balance Now</dt>
+                <dd class="text-right font-mono" x-text="fmtK(payment.loan_balance)"></dd>
+              </div>
+            </dl>
+
+            <div x-show="payment.notes" class="mt-4 pt-4 border-t border-[var(--border)]">
+              <p class="text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-mono mb-1">Notes</p>
+              <p class="text-[12.5px] text-[var(--ink-2)] whitespace-pre-wrap" x-text="payment.notes"></p>
+            </div>
+          </div>
+
+          <!-- Linked records -->
+          <div class="card p-5">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Linked Records</h3>
+            <div class="space-y-2">
+              <a x-show="payment.client"
+                 :href="'/app/clients/' + payment.client + '/'"
+                 class="flex items-center gap-3 p-2.5 -mx-2 rounded-lg hover:bg-[var(--cream)] transition group">
+                <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0"
+                     style="background: var(--accent);"
+                     x-text="(payment.client_name || '?')[0].toUpperCase()"></div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-medium truncate" x-text="payment.client_name || 'Client'"></p>
+                  <p class="text-[11px] font-mono text-[var(--ink-3)]">Client</p>
+                </div>
+                <svg class="w-4 h-4 text-[var(--ink-4)] group-hover:text-[var(--ink)] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </a>
+              <a x-show="payment.loan"
+                 :href="'/app/loans/' + payment.loan + '/'"
+                 class="flex items-center gap-3 p-2.5 -mx-2 rounded-lg hover:bg-[var(--cream)] transition group">
+                <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--cream)] flex-shrink-0">
+                  <svg class="w-4 h-4 text-[var(--ink-3)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-medium font-mono truncate" x-text="payment.loan_number || 'Loan'"></p>
+                  <p class="text-[11px] text-[var(--ink-3)]">Loan</p>
+                </div>
+                <svg class="w-4 h-4 text-[var(--ink-4)] group-hover:text-[var(--ink)] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="card p-5">
+            <h3 class="font-display text-[18px] tracking-tight mb-4">Actions</h3>
+
+            <div x-show="!payment.is_reversed" class="space-y-3">
+              <div class="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p class="text-[12.5px] text-amber-800">
+                  Reversing this payment will restore the loan balance and un-mark any instalments it settled.
+                </p>
+              </div>
+              <button @click="openReverse()"
+                      class="w-full text-[13.5px] rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition font-medium py-2.5 px-4">
+                Reverse Payment
+              </button>
+            </div>
+
+            <div x-show="payment.is_reversed" class="text-center py-3">
+              <p class="text-[13px] text-[var(--ink-3)]">This payment has been reversed.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ═══ Reverse modal ═══ -->
+  <div x-show="reverseModal" x-cloak
+       @keydown.escape.window="closeReverse()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div @click.away="closeReverse()"
+         class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+
+      <div class="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
+        <h3 class="font-display text-[20px] tracking-tight">Reverse Payment</h3>
+        <button @click="closeReverse()"
+                class="p-1.5 rounded-lg text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-black/5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div class="p-3 rounded-lg bg-red-50 border border-red-200">
+          <p class="text-[13px] text-red-800">
+            Reversing <span class="font-mono font-medium" x-text="payment?.payment_number"></span> will:
+          </p>
+          <ul class="mt-2 space-y-1 text-[12.5px] text-red-800 list-disc list-inside">
+            <li>Restore loan balance by <span class="font-mono font-medium" x-text="fmtK(payment?.amount)"></span></li>
+            <li>Un-mark any instalments that were fully settled</li>
+            <li>Mark this payment as reversed (kept in audit trail)</li>
+          </ul>
+        </div>
+
+        <div>
+          <label class="label">Reason for reversal <span class="text-red-500">*</span></label>
+          <textarea x-model="reverseForm.reason" rows="3" class="input"
+                    placeholder="e.g. Duplicate payment entry, wrong client"></textarea>
+        </div>
+
+        <div x-show="reverseError" x-cloak
+             class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+             x-text="reverseError"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-[var(--border)] bg-[var(--cream)] flex justify-end gap-3">
+        <button @click="closeReverse()" :disabled="reversing"
+                class="text-[13.5px] text-[var(--ink-2)] hover:text-[var(--ink)] font-medium px-4 py-2">Cancel</button>
+        <button @click="submitReverse()" :disabled="reversing"
+                class="btn-primary !py-2.5 !px-6 !text-[13.5px] !w-auto !bg-red-600">
+          <span x-text="reversing ? 'Reversing…' : 'Reverse Payment'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function paymentDetailPage() {
+  const API = '/api/payments/admin';
+  const PAYMENT_ID = '{{ payment_id }}';
+
+  return {
+    payment: null,
+    loading: false,
+    error: '', message: '', messageType: 'success',
+
+    reverseModal: false,
+    reverseError: '',
+    reversing: false,
+    reverseForm: { reason: '' },
+
+    async init() { await this.load(); },
+
+    getToken() { return localStorage.getItem('access_token') || sessionStorage.getItem('access_token'); },
+    authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + this.getToken(), ...extra }; },
+
+    async load() {
+      this.loading = true;
+      try {
+        const r = await fetch(`${API}/${PAYMENT_ID}/`, { headers: this.authHeaders() });
+        if (!r.ok) throw new Error('Payment not found.');
+        this.payment = await r.json();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    get totals() {
+      const rows = this.payment?.allocations || [];
+      return rows.reduce((acc, r) => ({
+        penalty:   acc.penalty   + parseFloat(r.penalty_portion   || 0),
+        interest:  acc.interest  + parseFloat(r.interest_portion  || 0),
+        principal: acc.principal + parseFloat(r.principal_portion || 0),
+        subtotal:  acc.subtotal  + parseFloat(r.penalty_portion   || 0)
+                                 + parseFloat(r.interest_portion  || 0)
+                                 + parseFloat(r.principal_portion || 0),
+      }), { penalty: 0, interest: 0, principal: 0, subtotal: 0 });
+    },
+
+    openReverse() {
+      this.reverseForm = { reason: '' };
+      this.reverseError = '';
+      this.reverseModal = true;
+    },
+
+    closeReverse() {
+      this.reverseModal = false;
+      this.reverseError = '';
+    },
+
+    async submitReverse() {
+      if (!this.reverseForm.reason?.trim()) {
+        this.reverseError = 'A reason is required.';
+        return;
+      }
+
+      this.reversing = true;
+      this.reverseError = '';
+      try {
+        const r = await fetch(`${API}/${PAYMENT_ID}/reverse/`, {
+          method: 'POST',
+          headers: this.authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ reason: this.reverseForm.reason }),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'Reversal failed');
+        }
+
+        this.payment = await r.json();
+        this.reverseModal = false;
+        this.flash('Payment reversed successfully.');
+      } catch (e) {
+        this.reverseError = e.message;
+      } finally {
+        this.reversing = false;
+      }
+    },
+
+    flash(msg, type = 'success') {
+      this.message = msg;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4000);
+    },
+
+    prettyType(t) {
+      return {
+        INSTALLMENT: 'Installment',
+        PENALTY:     'Penalty',
+        PARTIAL:     'Partial',
+        BULK:        'Bulk',
+      }[t] || t || '—';
+    },
+
+    fmtK(v) {
+      if (v == null || v === '') return '—';
+      const n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return 'K' + n.toLocaleString('en-ZM', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      }); }
+      catch { return iso; }
+    },
+
+    fmtDateTime(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('en-GB', {
+          day: 'numeric', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+      } catch { return iso; }
+    },
+  };
+}
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('paymentDetailPage', paymentDetailPage);
+});
+</script>
+{% endblock %}

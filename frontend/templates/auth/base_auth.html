@@ -1,0 +1,167 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}{{ site.site_name }}{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% if site.favicon %}{{ site.favicon.url }}{% else %}{% static 'images/nimbus-mark.svg' %}{% endif %}" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
+
+  <style>
+    :root {
+      --ink: #0A0A0A;
+      --ink-2: #52525B;
+      --ink-3: #71717A;
+      --cream: #FAF7F2;
+      --paper: #FFFFFF;
+      --accent: {{ site.accent_color|default:"#B45309" }};
+      --primary: {{ site.primary_color|default:"#0A0A0A" }};
+      --border: rgba(10,10,10,0.08);
+      --border-2: rgba(10,10,10,0.12);
+    }
+    body { font-family: 'Inter', system-ui, sans-serif; color: var(--ink); background: var(--cream); -webkit-font-smoothing: antialiased; }
+    .font-display { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: -0.02em; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border-2);
+      border-radius: 0.75rem;
+      font-size: 0.9375rem;
+      background: white;
+      transition: all 0.15s ease;
+    }
+    .input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .input::placeholder { color: var(--ink-3); }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      background: var(--primary);
+      color: white;
+      font-weight: 500;
+      font-size: 0.9375rem;
+      border-radius: 0.75rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(10,10,10,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+      cursor: pointer;
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(10,10,10,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .label { display: block; font-size: 0.8125rem; font-weight: 500; color: var(--ink); margin-bottom: 0.5rem; }
+    .error-box {
+      background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B;
+      padding: 0.75rem 1rem; border-radius: 0.625rem; font-size: 0.875rem;
+    }
+    .noise::after {
+      content:''; position:absolute; inset:0; pointer-events:none;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+      opacity: 0.03; mix-blend-mode: multiply;
+    }
+    .bg-grid {
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+<div class="min-h-screen grid lg:grid-cols-[1fr_520px]">
+
+  <!-- â•â•â•â•â•â•â•â•â• LEFT PANEL â€” Brand â•â•â•â•â•â•â•â•â• -->
+  <div class="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden noise"
+       style="background: linear-gradient(160deg, #0A0A0A 0%, #18181B 100%);">
+    <div class="absolute inset-0 bg-grid opacity-[0.06] pointer-events-none"></div>
+    <div class="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full opacity-20 pointer-events-none"
+         style="background: radial-gradient(ellipse, var(--accent), transparent 70%); filter: blur(100px);"></div>
+
+    <!-- Logo -->
+    <div class="relative">
+      <a href="/" class="inline-flex items-center gap-3">
+        <span class="inline-flex w-10 h-10 rounded-[12px] items-center justify-center bg-white">
+          <svg width="20" height="20" viewBox="0 0 40 40" fill="none">
+            <path d="M12 28V12L28 28V12" stroke="#0A0A0A" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="flex flex-col leading-none">
+          <span class="font-display text-[22px] text-white tracking-tight">Nimbus</span>
+          <span class="text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1 font-mono">Investment Ltd.</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Quote / testimonial -->
+    <div class="relative max-w-lg">
+      <p class="font-display text-[34px] lg:text-[44px] text-white leading-[1.15] tracking-tight">
+        The lending platform Zambian MFIs have been waiting for.
+      </p>
+      <p class="mt-6 text-[15px] text-white/60 leading-relaxed">
+        Multi-tenant, multi-branch loan management with full double-entry
+        accounting, mobile money integration, and Bank of Zambia prudential
+        reporting â€” all in one platform.
+      </p>
+
+      <div class="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-[13px] text-white/50">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          BFSA 2026 ready
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          IFRS-compliant GL
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          Mobile money native
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer meta -->
+    <div class="relative flex items-center justify-between text-[12px] text-white/30 font-mono">
+      <span>Â© 2026 Nimbus Investment Ltd.</span>
+      <span>Lusaka, Zambia</span>
+    </div>
+  </div>
+
+  <!-- â•â•â•â•â•â•â•â•â• RIGHT PANEL â€” Form â•â•â•â•â•â•â•â•â• -->
+  <div class="flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-12 bg-white min-h-screen lg:min-h-0">
+    <div class="w-full max-w-md mx-auto">
+
+      <!-- Mobile logo -->
+      <div class="lg:hidden mb-10">
+        <a href="/" class="inline-flex items-center gap-2.5">
+          <span class="inline-flex w-9 h-9 rounded-[10px] items-center justify-center bg-[var(--ink)]">
+            <svg width="18" height="18" viewBox="0 0 40 40" fill="none">
+              <path d="M12 28V12L28 28V12" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="font-display text-[20px] tracking-tight">Nimbus</span>
+        </a>
+      </div>
+
+      {% block form %}{% endblock %}
+
+    </div>
+  </div>
+
+</div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

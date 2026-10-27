@@ -1,0 +1,29 @@
+{% load nimbus_icons %}
+<section {% if section.anchor %}id="{{ section.anchor }}"{% endif %} class="py-28 lg:py-32 bg-white scroll-mt-20">
+  <div class="max-w-[1280px] mx-auto px-6 lg:px-8">
+    <div class="max-w-3xl mb-16 reveal">
+      {% if section.eyebrow %}<div class="eyebrow mb-5">{{ section.eyebrow }}</div>{% endif %}
+      <h2 class="font-display text-[42px] sm:text-[56px] lg:text-[64px] leading-[1.02] text-[var(--ink)]">
+        {{ section.title }}
+      </h2>
+      {% if section.subtitle %}<p class="mt-6 text-[17px] text-[var(--ink-2)] leading-[1.7] max-w-2xl">{{ section.subtitle }}</p>{% endif %}
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--border)] border border-[var(--border)] rounded-2xl overflow-hidden">
+      {% for item in section.visible_items %}
+      <div class="reveal reveal-d{{ forloop.counter }} bg-white p-8 hover:bg-[var(--cream)] transition-colors group">
+        {% if item.icon %}
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-5 transition group-hover:scale-110"
+             style="background: var(--ink);">
+          <svg style="width: 18px; height: 18px;" class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="{% icon_path item.icon %}"/>
+          </svg>
+        </div>
+        {% endif %}
+        <h3 class="text-[17px] font-semibold text-[var(--ink)] mb-2 tracking-tight">{{ item.title }}</h3>
+        <p class="text-[14.5px] text-[var(--ink-2)] leading-[1.65]">{{ item.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

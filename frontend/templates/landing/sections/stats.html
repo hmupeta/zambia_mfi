@@ -1,0 +1,15 @@
+<section class="py-24 bg-[#0A0A0A] relative overflow-hidden noise">
+  <div class="absolute inset-0 bg-grid opacity-[0.05] pointer-events-none"></div>
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full opacity-20 pointer-events-none" style="background: radial-gradient(ellipse, var(--accent), transparent 70%); filter: blur(80px);"></div>
+
+  <div class="relative max-w-[1280px] mx-auto px-6 lg:px-8">
+    <div class="grid md:grid-cols-{{ section.visible_items|length|default:4 }} gap-10 text-center">
+      {% for item in section.visible_items %}
+      <div class="reveal reveal-d{{ forloop.counter }}">
+        <p class="font-display text-[68px] sm:text-[88px] leading-none text-white tabular-nums">{{ item.title }}</p>
+        {% if item.subtitle %}<p class="mt-4 text-[13px] uppercase tracking-[0.14em] text-[#71717A] font-mono">{{ item.subtitle }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
